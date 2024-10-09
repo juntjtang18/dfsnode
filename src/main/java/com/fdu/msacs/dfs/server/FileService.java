@@ -29,9 +29,21 @@ public class FileService {
         logger.info("saveFile(...) called...");
 
         String filename = file.getOriginalFilename();
+        logger.info("Original filename: {}", filename); // Log the original filename
+
+        // Sanitize the filename
+        if (filename != null) {
+            filename = filename.replace("'", ""); // Remove single quotes
+            filename = filename.trim(); // Trim leading/trailing spaces
+            // Optionally replace other unwanted characters
+            filename = filename.replaceAll("[^a-zA-Z0-9.\\-]", "_"); // Replace with underscores
+        }
+
         Path filePath = rootDir.resolve(filename);
+        logger.info("Saving file to path: {}", filePath); // Log the path where the file will be saved
         file.transferTo(filePath.toFile());
     }
+
 
     public Path getFilePath(String filename) throws IOException {
         logger.info("FileService::getFilePath({}) called...", filename);

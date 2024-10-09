@@ -6,7 +6,7 @@ import java.io.File;
 import java.net.URISyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
+import java.net.URI; 
 @Service
 @Lazy
 public class Config {
@@ -23,38 +23,67 @@ public class Config {
 
     public static String getAppDirectory() {
         try {
-            String os = System.getProperty("os.name").toLowerCase();
-            String jarPath = new File(Config.class.getProtectionDomain().getCodeSource().getLocation().toURI()).getPath();
-            File jarDir;
-            
-            logger.debug("getAppDirectory() --- os={}  jarPath={} ", os, jarPath);
-            
-            if (os.contains("win")) {
-                jarDir = new File(jarPath).getParentFile();
-            } else if (os.contains("nix") || os.contains("nux") || os.contains("mac")) {
-                jarDir = new File(jarPath).getParentFile().getParentFile().getParentFile();
+            // Get the path of the running class or JAR
+            String jarPath = Config.class.getProtectionDomain().getCodeSource().getLocation().toString();
+            logger.info("jarPath: {}", jarPath);
+
+            File jarFile;
+
+            // If the path is a URI (starts with "jar:file:" or "file:")
+            if (jarPath.startsWith("jar:file:")) {
+                jarPath = jarPath.substring(9, jarPath.indexOf('!')); // Extract the JAR path
+                jarFile = new File(new URI(jarPath)); // Handle as URI
+            } else if (jarPath.startsWith("file:")) {
+                jarPath = jarPath.substring(5); // Strip "file:" prefix and handle as file path
+                jarFile = new File(jarPath);
             } else {
-                throw new IllegalStateException("Unsupported OS");
-            }
-            //logger.debug("Config::getAppDirectory() --- jarDir={}", jarDir);
-            
-            // Check if the system property 'appDir' is set
-            String appDir = System.getProperty("appDir");
-            
-            //logger.debug(" System.getProperty(appDir)={}", appDir);
-            
-            if (appDir != null) {
-                return appDir;
+                // Handle as a regular file path (no URI involved)
+                jarFile = new File(jarPath);
             }
 
-            // Default to jar directory if 'appDir' is not set
-            return jarDir.getAbsolutePath();
-            
-        } catch (URISyntaxException e) {
+            // Call helper method to handle the app directory logic
+            return handleAppDirectory(jarFile);
+
+        } catch (URISyntaxException | IllegalArgumentException e) {
             logger.error("Failed to get app directory", e);
             throw new RuntimeException("Failed to get app directory", e);
         }
     }
+
+    private static String handleAppDirectory(File jarFile) {
+        // Get the parent directory of the JAR file
+        File jarDir = jarFile.getParentFile();
+
+        // Check if we're running from class files in Eclipse (./target/classes)
+        if (jarDir != null && jarDir.getName().equals("classes")) {
+            // Navigate up two levels to reach ./target
+            jarDir = jarDir.getParentFile(); // Go to target
+        }
+
+        // Default to a fallback directory if jarDir is null or doesn't exist (e.g., in a container)
+        if (jarDir == null || !jarDir.exists()) {
+            logger.warn("Jar directory is null or does not exist: {}", jarDir);
+            jarDir = new File("/app"); // Fallback to /app in a container environment
+        }
+
+        // Create the "dfs" directory within the jarDir
+        File dfsDir = new File(jarDir, "dfs");
+
+        // Create the directory if it doesn't exist
+        if (!dfsDir.exists()) {
+            boolean created = dfsDir.mkdirs();
+            if (!created) {
+                logger.error("Failed to create directory: {}", dfsDir.getAbsolutePath());
+            } else {
+                logger.info("Directory created successfully: {}", dfsDir.getAbsolutePath());
+            }
+        } else {
+            logger.info("Directory already exists: {}", dfsDir.getAbsolutePath());
+        }
+
+        return dfsDir.getAbsolutePath();
+    }
+
 
 
 }
