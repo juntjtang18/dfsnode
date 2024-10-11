@@ -11,10 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
-
-import com.fdu.msacs.dfsmetanode.RequestFileLocation;
-import com.fdu.msacs.dfsmetanode.RequestReplicationNodes;
-
 import jakarta.annotation.PostConstruct;
 
 import java.io.IOException;
@@ -40,9 +36,9 @@ public class FileService {
     
     @Autowired
     private Config config;
-    
+
     public Path getRootDir() {
-    	return rootDir;
+        return rootDir;
     }
     
     public FileService() throws IOException {
@@ -52,35 +48,58 @@ public class FileService {
     public void postContruction() {
         this.rootDir = Paths.get(Config.getAppDirectory(), "/file-storage");
         logger.info("FileService rootDir at {}", this.rootDir.toString());
-        if (!Files.exists(rootDir)) {
-        	try {
-        		Files.createDirectories(rootDir);
-        	} catch (Exception e) {
-        		e.printStackTrace();
-        	}
+        
+        if (Files.exists(rootDir)) {
+            if (Files.isRegularFile(rootDir)) {
+                logger.error("A file exists with the same name as the desired directory: {}", rootDir);
+                return; // or handle as needed
+            }
+        } else {
+            try {
+                Files.createDirectories(rootDir);
+            } catch (IOException e) {
+                logger.error("Failed to create directory: {}", rootDir, e);
+            }
         }
+
         this.nodePort = config.getPort();
-        this.nodeUrl = this.nodeHost+":"+this.nodePort;
+        this.nodeUrl = this.nodeHost + ":" + this.nodePort;
+
+        // Set metaNodeUrl based on the running environment
+        if (isRunningInDocker()) {
+            metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
+        }
+        logger.info("MetaNode URL set to: {}", metaNodeUrl);
+    }
+
+    private boolean isRunningInDocker() {
+        String cgroup = "";
+        try {
+            cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
+        } catch (IOException e) {
+            logger.info("Could not read cgroup file");
+        }
+        return cgroup.contains("docker") || cgroup.contains("kubepods");
     }
     
+    // Rest of the methods remain unchanged
     public void saveFile(MultipartFile file) throws IOException {
         logger.info("saveFile(...) called...");
-
+        
         String filename = file.getOriginalFilename();
-        logger.info("Original filename: {}", filename); // Log the original filename
-
+        logger.info("Original filename: {}", filename);
+        
         // Sanitize the filename
         if (filename != null) {
             filename = filename.replace("'", ""); // Remove single quotes
             filename = filename.trim(); // Trim leading/trailing spaces
-            //filename = filename.replaceAll("[^a-zA-Z0-9.\\-]", "_"); // Replace with underscores
         }
 
         Path filePath = rootDir.resolve(filename);
-        logger.info("Saving file to path: {}", filePath); // Log the path where the file will be saved
+        logger.info("Saving file to path: {}", filePath);
         
         // Ensure the parent directory exists
-        Files.createDirectories(filePath.getParent());  // Create the directory if it doesn't exist
+        Files.createDirectories(filePath.getParent());
 
         try {
             file.transferTo(filePath.toFile());
@@ -88,7 +107,6 @@ public class FileService {
             e.printStackTrace();
         }
     }
-
 
     public void saveFileAndReplicate(MultipartFile file) throws IOException {
         logger.info("Saving file locally and starting replication...");
@@ -98,7 +116,7 @@ public class FileService {
 
         // 2. Register the file with the metadata node
         String filename = file.getOriginalFilename();
-        String currentNodeUrl = nodeUrl;  // Replace with actual node URL
+        String currentNodeUrl = nodeUrl; 
         
         String restUrl = metaNodeUrl + "/metadata/register-file-location";
         logger.info("Register file location rest URL: {}", restUrl);
@@ -133,10 +151,8 @@ public class FileService {
     public Path getFilePath(String filename) throws IOException {
         logger.info("FileService::getFilePath({}) called...", filename);
         
-        // Create the file path relative to the root directory
         Path filePath = rootDir.resolve(filename);
 
-        // Check if the file exists
         if (!Files.exists(filePath) || !Files.isReadable(filePath)) {
             logger.warn("File not found or not readable: {}", filename);
             return null; // or throw an exception if you prefer
@@ -148,20 +164,16 @@ public class FileService {
     public byte[] getFile(String filename) throws IOException {
         logger.info("FileService::getFile({}) called...", filename);
 
-        // Create the file path relative to the root directory
         Path filePath = rootDir.resolve(filename);
 
-        // Check if the file exists and is readable
         if (!Files.exists(filePath) || !Files.isReadable(filePath)) {
             logger.warn("File not found or not readable: {}", filename);
             return null; // or throw an exception if you prefer
         }
 
-        // Read the file content into a byte array
         return Files.readAllBytes(filePath);
     }
 
-    // New method to get a list of files in the rootDir
     public List<String> getFileList() throws IOException {
         logger.info("getFileList() called...");
 

@@ -18,7 +18,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 @RestController
-@RequestMapping("/dfs")
 public class FileController {
     private static final Logger logger = LoggerFactory.getLogger(FileController.class);
 
@@ -29,7 +28,7 @@ public class FileController {
     }
 
     // Upload a file (client-side upload)
-    @PostMapping("/upload")
+    @PostMapping("/dfs/upload")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
         logger.info("/dfs/upload requested.");
         try {
@@ -44,8 +43,20 @@ public class FileController {
     }
     
     // Replicate file between nodes (node-to-node replication)
-    @PostMapping("/rep")
-    public ResponseEntity<String> replicateFile(@RequestParam("file") MultipartFile file) {
+    @PostMapping("/dfs/replicate")
+    public ResponseEntity<String> repFile(@RequestParam("file") MultipartFile file) {
+        logger.info("/dfs/upload requested.");
+        try {
+            // Save file locally and replicate
+            fileService.saveFileAndReplicate(file);
+            return ResponseEntity.ok("File uploaded successfully");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                 .body("File upload failed");
+        }
+
+    	/*
         logger.info("/dfs/replicate requested.");
         try {
             // Save replicated file locally (no further replication)
@@ -56,9 +67,10 @@ public class FileController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                  .body("File replication failed");
         }
+        */
     }
 
-    @GetMapping("/getfile/{filename}")
+    @GetMapping("/dfs/getfile/{filename}")
     public ResponseEntity<Resource> downloadFile(@PathVariable String filename) {
         logger.info("Request to download file: {}", filename);
 
@@ -90,7 +102,7 @@ public class FileController {
     }
     
     // Get list of files
-    @GetMapping("/file-list")
+    @GetMapping("/dfs/file-list")
     public ResponseEntity<List<String>> getFileList() {
         logger.info("/dfs/file-list requested.");
         try {

@@ -60,11 +60,6 @@
             <artifactId>ini4j</artifactId>
             <version>0.5.4</version>
         </dependency>
-		<dependency>
-		    <groupId>com.fdu.msacs</groupId>  <!-- This should match exactly -->
-		    <artifactId>dfsmetanode</artifactId> <!-- This should match the artifactId of the installed module -->
-		    <version>0.0.1-SNAPSHOT</version> <!-- Make sure this version matches -->
-		</dependency>
 
 	</dependencies>
 
