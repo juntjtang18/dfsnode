@@ -8,27 +8,65 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import com.fdu.msacs.dfs.server.ByteArrayHttpMessageConverter;
 
+import jakarta.annotation.PostConstruct;
+
 import java.io.File;
+import java.io.IOException;
 import java.net.URISyntaxException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.net.URI;
 
 @Configuration
 @Service
-@Lazy
 public class Config {
     private static Logger logger = LoggerFactory.getLogger(Config.class);
     private static Config instance;
-    @Value("${dfs.node.address}")
+    @Value("${dfs.node.url}")
     private String nodeUrl;
-    
+    @Value("${server.port}")
+    private String nodePort;
+    @Value("${meta.node.url}")
+    private String metaNodeUrl;
     // Provide a global point of access to the instance
+    
+    @Bean
     public static synchronized Config getInstance() {
         if (instance == null) {
             instance = new Config();
         }
         return instance;
+    }
+    
+    public Config() {
+    	/*
+        if (isRunningInDocker()) {
+        	nodePort = System.getenv("HOST_PORT");
+        	String hname = System.getenv("CONTAINER_NAME");
+        	nodeUrl = "http://" + hname + ":" + nodePort;  // Using application name as the node name
+        	metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
+        } else {
+        	nodeUrl = nodeUrl + ":" + nodePort; // Using value from application.properties
+            //metaNodeUrl = "http://localhost:8080"; // Use localhost for requests
+        }
+        */
+    }
+    @PostConstruct
+    public void postConstruct() {
+    	
+        if (isRunningInDocker()) {
+        	nodePort = System.getenv("HOST_PORT");
+        	String hname = System.getenv("CONTAINER_NAME");
+        	nodeUrl = "http://" + hname + ":" + nodePort;  // Using application name as the node name
+        	metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
+        } else {
+        	nodeUrl = nodeUrl + ":" + nodePort; // Using value from application.properties
+            //metaNodeUrl = "http://localhost:8080"; // Use localhost for requests
+        }
+
     }
 
 	@Bean
@@ -39,15 +77,15 @@ public class Config {
 	}
 	
 	public String getPort() {
-    	String port = System.getenv("HOST_PORT");
-    	if (port == null || port.equals("")) {
-    		port = "8081";
-    	}
-    	return port;
+    	return nodePort;
     }
     
     public String getNodeUrl() {
     	return nodeUrl;
+    }
+    
+    public String getMetaNodeUrl() {
+    	return metaNodeUrl;
     }
     
     public static String getAppDirectory() {
@@ -113,6 +151,15 @@ public class Config {
         return dfsDir.getAbsolutePath();
     }
 
+	private boolean isRunningInDocker() {
+	    String cgroup = "";
+	    try {
+	        cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
+	    } catch (IOException e) {
+	        logger.info("Could not read cgroup file. ");
+	    }
+	    return cgroup.contains("docker") || cgroup.contains("kubepods");
+	}
 
 
 }

@@ -3,7 +3,6 @@ package com.fdu.msacs.dfs.server;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
@@ -16,7 +15,6 @@ import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,14 +23,10 @@ public class FileService {
     private static final Logger logger = LoggerFactory.getLogger(FileService.class);
 
     private Path rootDir;
-    @Value("${metadata.service.url}")
-    private String metaNodeUrl;
     @Autowired
     private RestTemplate restTemplate;
-    @Value("${dfs.node.address}")
-    private String nodeHost;
-    private String nodePort;
     private String nodeUrl;
+    private String metaNodeUrl;
     
     @Autowired
     private Config config;
@@ -46,43 +40,10 @@ public class FileService {
 
     @PostConstruct
     public void postContruction() {
-        this.rootDir = Paths.get(Config.getAppDirectory(), "/file-storage");
-        logger.info("FileService rootDir at {}", this.rootDir.toString());
-        
-        if (Files.exists(rootDir)) {
-            if (Files.isRegularFile(rootDir)) {
-                logger.error("A file exists with the same name as the desired directory: {}", rootDir);
-                return; // or handle as needed
-            }
-        } else {
-            try {
-                Files.createDirectories(rootDir);
-            } catch (IOException e) {
-                logger.error("Failed to create directory: {}", rootDir, e);
-            }
-        }
-
-        this.nodePort = config.getPort();
-        this.nodeUrl = this.nodeHost + ":" + this.nodePort;
-
-        // Set metaNodeUrl based on the running environment
-        if (isRunningInDocker()) {
-            metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
-        }
-        logger.info("MetaNode URL set to: {}", metaNodeUrl);
+    	this.nodeUrl = config.getNodeUrl();
+    	this.metaNodeUrl = config.getMetaNodeUrl();
     }
 
-    private boolean isRunningInDocker() {
-        String cgroup = "";
-        try {
-            cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
-        } catch (IOException e) {
-            logger.info("Could not read cgroup file");
-        }
-        return cgroup.contains("docker") || cgroup.contains("kubepods");
-    }
-    
-    // Rest of the methods remain unchanged
     public void saveFile(MultipartFile file) throws IOException {
         logger.info("saveFile(...) called...");
         

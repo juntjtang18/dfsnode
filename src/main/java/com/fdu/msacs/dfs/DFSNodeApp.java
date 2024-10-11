@@ -2,6 +2,7 @@ package com.fdu.msacs.dfs;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import org.slf4j.Logger;
@@ -24,38 +25,34 @@ import jakarta.annotation.PostConstruct;
 public class DFSNodeApp {
     private static final Logger logger = LoggerFactory.getLogger(DFSNodeApp.class);
     private RestTemplate restTemplate = new RestTemplate();
+    private Path rootDir;
+    @Autowired
+    private Config config;
     
-    @Value("${metadata.service.url}")
-    private String metaServerUrl;
-    @Value("${dfs.node.address}")
-    private String nodeUrl;
-	public static void main(String[] args) {
+ 	public static void main(String[] args) {
 		SpringApplication.run(DFSNodeApp.class, args);
 	}
-
+ 	
+ 	public DFSNodeApp() {
+ 		//this.config = new Config();
+ 	}
+ 	
 	@PostConstruct
 	public void registerNodeWithMetadataService() {
-	    Config config = new Config();
-	    String nodeAddress = nodeUrl + ":" + config.getPort();  // Adjust to the actual node address and port
-
-	    // Check if the application is running inside a Docker container
-	    String metaServerUrlToUse;
-        if (isRunningInDocker()) {
-        	String hostname = System.getenv("CONTAINER_NAME");
-            nodeAddress = "http://" + hostname + ":" + config.getPort();  // Using application name as the node name
-	        metaServerUrlToUse = "http://dfs-meta-node:8080"; // Use container name for requests
-        } else {
-            nodeAddress = nodeUrl + ":" + config.getPort(); // Using value from application.properties
-	        metaServerUrlToUse = "http://localhost:8080"; // Use localhost for requests
-        }
-	    logger.info("Registering node {} to MetaNode at: {}", nodeAddress, metaServerUrl);
+	    
+	    String nodeUrl = config.getNodeUrl();
+	    String metaUrl = config.getMetaNodeUrl();
+	    
+	    logger.info("Registering node {} to MetaNode at: {}", nodeUrl, metaUrl);
 
 	    try {
-	        RequestNode request = new RequestNode();
-	        request.setNodeUrl(nodeAddress);
+		    createDfsFileRoot();
+
+		    RequestNode request = new RequestNode();
+	        request.setNodeUrl(nodeUrl);
 	        
 	        ResponseEntity<String> response = restTemplate.postForEntity(
-	                metaServerUrlToUse + "/metadata/register-node", 
+	        		metaUrl + "/metadata/register-node", 
 	                request, 
 	                String.class);
 
@@ -76,15 +73,23 @@ public class DFSNodeApp {
 	 * Check if the application is running inside a Docker container.
 	 * @return true if running in a Docker container, false otherwise.
 	 */
-	private boolean isRunningInDocker() {
-	    String cgroup = "";
-	    try {
-	        cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
-	    } catch (IOException e) {
-	        logger.info("Could not read cgroup file. ");
-	    }
-	    return cgroup.contains("docker") || cgroup.contains("kubepods");
+
+	public void createDfsFileRoot() {
+        this.rootDir = Paths.get(Config.getAppDirectory(), "/file-storage");
+        
+        logger.info("FileService rootDir at {}", this.rootDir.toString());
+        
+        if (Files.exists(rootDir)) {
+            if (Files.isRegularFile(rootDir)) {
+                logger.error("A file exists with the same name as the desired directory: {}", rootDir);
+                return; // or handle as needed
+            }
+        } else {
+            try {
+                Files.createDirectories(rootDir);
+            } catch (IOException e) {
+                logger.error("Failed to create directory: {}", rootDir, e);
+            }
+        }
 	}
-
-
 }
