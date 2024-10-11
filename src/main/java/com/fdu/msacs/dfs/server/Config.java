@@ -1,18 +1,28 @@
 package com.fdu.msacs.dfs.server;
 
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import com.fdu.msacs.dfs.server.ByteArrayHttpMessageConverter;
+
 import java.io.File;
 import java.net.URISyntaxException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.net.URI; 
+import java.net.URI;
+
+@Configuration
 @Service
 @Lazy
 public class Config {
-    private static final Logger logger = LoggerFactory.getLogger(Config.class);
+    private static Logger logger = LoggerFactory.getLogger(Config.class);
     private static Config instance;
-
+    @Value("${dfs.node.address}")
+    private String nodeUrl;
+    
     // Provide a global point of access to the instance
     public static synchronized Config getInstance() {
         if (instance == null) {
@@ -21,6 +31,25 @@ public class Config {
         return instance;
     }
 
+	@Bean
+	public RestTemplate restTemplate() {
+	    RestTemplate restTemplate = new RestTemplate();
+	    restTemplate.getMessageConverters().add(new ByteArrayHttpMessageConverter());
+	    return restTemplate;
+	}
+	
+	public String getPort() {
+    	String port = System.getenv("HOST_PORT");
+    	if (port == null || port.equals("")) {
+    		port = "8081";
+    	}
+    	return port;
+    }
+    
+    public String getNodeUrl() {
+    	return nodeUrl;
+    }
+    
     public static String getAppDirectory() {
         try {
             // Get the path of the running class or JAR

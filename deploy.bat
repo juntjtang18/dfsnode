@@ -1,18 +1,19 @@
 @echo off
-echo "Building Docker image..."
-docker build -t dfs-app .
+setlocal
 
-echo "Stopping and Removing existing containers..."
-docker stop dfs-app-8081
-docker rm dfs-app-8081
-docker stop dfs-app-8082
-docker rm dfs-app-8082
-docker stop dfs-app-8083
-docker rm dfs-app-8083
+rem Stop and remove existing containers
+for /L %%i in (1, 1, 3) do (
+    docker stop dfs-node-%%i
+    docker rm dfs-node-%%i
+)
 
-echo "Deploying new containers..."
-docker run -d -p 8081:8081 --name dfs-app-8081 dfs-app
-docker run -d -p 8082:8081 --name dfs-app-8082 dfs-app
-docker run -d -p 8083:8081 --name dfs-app-8083 dfs-app
+rem Build the image
+docker build -t dfs-node .
+
+rem Deploy containers with port mappings
+docker run -d --name dfs-node-1 -e HOST_PORT=8081 -p 8081:8081 dfs-node
+docker run -d --name dfs-node-2 -e HOST_PORT=8082 -p 8082:8081 dfs-node
+docker run -d --name dfs-node-3 -e HOST_PORT=8083 -p 8083:8081 dfs-node
 
 echo "Deployment completed!"
+endlocal
