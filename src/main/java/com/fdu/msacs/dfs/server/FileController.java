@@ -28,17 +28,33 @@ public class FileController {
         this.fileService = fileService;
     }
 
-    // Upload a file
+    // Upload a file (client-side upload)
     @PostMapping("/upload")
     public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
         logger.info("/dfs/upload requested.");
         try {
-            fileService.saveFile(file);
+            // Save file locally and replicate
+            fileService.saveFileAndReplicate(file);
             return ResponseEntity.ok("File uploaded successfully");
         } catch (IOException e) {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                                  .body("File upload failed");
+        }
+    }
+    
+    // Replicate file between nodes (node-to-node replication)
+    @PostMapping("/rep")
+    public ResponseEntity<String> replicateFile(@RequestParam("file") MultipartFile file) {
+        logger.info("/dfs/replicate requested.");
+        try {
+            // Save replicated file locally (no further replication)
+            fileService.saveFile(file);
+            return ResponseEntity.ok("File replicated successfully");
+        } catch (IOException e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                 .body("File replication failed");
         }
     }
 
