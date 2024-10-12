@@ -1,14 +1,6 @@
 # Use an appropriate base image with JDK 17 installed
 FROM maven:3.8.5-openjdk-17 AS build
 
-# Install essential tools
-RUN apt-get update && apt-get install -y \
-    curl \
-    iputils-ping \
-    net-tools \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-	
 # Set the working directory in the container
 WORKDIR /app
 

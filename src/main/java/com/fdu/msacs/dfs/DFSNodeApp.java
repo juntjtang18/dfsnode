@@ -33,13 +33,10 @@ public class DFSNodeApp {
 		SpringApplication.run(DFSNodeApp.class, args);
 	}
  	
- 	public DFSNodeApp() {
- 		//this.config = new Config();
- 	}
- 	
 	@PostConstruct
 	public void registerNodeWithMetadataService() {
-	    
+		logger.info("Config instalizing... at node {}:{}", config.getNodeUrl(), config.getPort());
+		
 	    String nodeUrl = config.getNodeUrl();
 	    String metaUrl = config.getMetaNodeUrl();
 	    
@@ -75,7 +72,7 @@ public class DFSNodeApp {
 	 */
 
 	public void createDfsFileRoot() {
-        this.rootDir = Paths.get(Config.getAppDirectory(), "/file-storage");
+        this.rootDir = Paths.get(config.getRootDir());
         
         logger.info("FileService rootDir at {}", this.rootDir.toString());
         

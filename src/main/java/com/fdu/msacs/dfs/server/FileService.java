@@ -4,17 +4,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.annotation.PostConstruct;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,11 +45,12 @@ public class FileService {
 
     @PostConstruct
     public void postContruction() {
+    	this.rootDir = Paths.get(config.getRootDir()); 
     	this.nodeUrl = config.getNodeUrl();
     	this.metaNodeUrl = config.getMetaNodeUrl();
     }
 
-    public void saveFile(MultipartFile file) throws IOException {
+    public String saveFile(MultipartFile file) throws IOException {
         logger.info("saveFile(...) called...");
         
         String filename = file.getOriginalFilename();
@@ -65,26 +71,31 @@ public class FileService {
         try {
             file.transferTo(filePath.toFile());
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error saving file: {}", e.getMessage());
+            throw new IOException("Failed to save file", e);
         }
+
+        // Return the full path of the local file as a String
+        return filePath.toString();
     }
+
 
     public void saveFileAndReplicate(MultipartFile file) throws IOException {
         logger.info("Saving file locally and starting replication...");
 
-        // 1. Save the file locally
-        saveFile(file);
+        // 1. Save the file locally and get the local file path
+        String localFilePath = saveFile(file); // Assuming this method returns the path of the saved file
 
         // 2. Register the file with the metadata node
         String filename = file.getOriginalFilename();
         String currentNodeUrl = nodeUrl; 
-        
+
         String restUrl = metaNodeUrl + "/metadata/register-file-location";
-        logger.info("Register file location rest URL: {}", restUrl);
-        
+        logger.info("Register file location REST URL: {}", restUrl);
+
         RequestFileLocation requestFileLocation = new RequestFileLocation(filename, currentNodeUrl);
         ResponseEntity<String> response = restTemplate.postForEntity(restUrl, requestFileLocation, String.class);
-        
+
         if (!response.getStatusCode().is2xxSuccessful()) {
             throw new IOException("Failed to register file with metadata server");
         }
@@ -101,14 +112,34 @@ public class FileService {
                 new ParameterizedTypeReference<List<String>>() {}
         );
         List<String> replicationNodes = nodeListResponse.getBody();
+        logger.debug("The nodes to replicate to: {}", replicationNodes);
 
         // 4. Replicate the file to the retrieved nodes
         for (String nodeUrl : replicationNodes) {
-            logger.info("Replicating file to node: " + nodeUrl);
-            restTemplate.postForObject(nodeUrl + "/dfs/replicate", file, String.class);
+            logger.info("Replicating file to node: {}", nodeUrl);
+
+            // Use FileSystemResource to replicate the file
+            File fileToReplicate = new File(localFilePath);
+            FileSystemResource resource = new FileSystemResource(fileToReplicate);
+
+            // Prepare the request for replication
+            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+            body.add("file", resource);
+            
+            HttpEntity<MultiValueMap<String, Object>> requestEntityForReplication = new HttpEntity<>(body);
+
+            // Send the FileSystemResource to the replication node and capture the response
+            ResponseEntity<String> replicationResponse = restTemplate.postForEntity(nodeUrl + "/dfs/replicate", requestEntityForReplication, String.class);
+
+            // Log the result of the replication
+            if (replicationResponse.getStatusCode().is2xxSuccessful()) {
+                logger.info("Successfully replicated file to node: {}. Response: {}", nodeUrl, replicationResponse.getBody());
+            } else {
+                logger.error("Failed to replicate file to node: {}. Status code: {}. Response: {}", nodeUrl, replicationResponse.getStatusCode(), replicationResponse.getBody());
+            }
         }
     }
-    
+
     public Path getFilePath(String filename) throws IOException {
         logger.info("FileService::getFilePath({}) called...", filename);
         

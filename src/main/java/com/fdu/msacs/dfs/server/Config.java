@@ -21,44 +21,24 @@ import org.slf4j.LoggerFactory;
 import java.net.URI;
 
 @Configuration
-@Service
 public class Config {
     private static Logger logger = LoggerFactory.getLogger(Config.class);
-    private static Config instance;
     @Value("${dfs.node.url}")
     private String nodeUrl;
     @Value("${server.port}")
     private String nodePort;
     @Value("${meta.node.url}")
     private String metaNodeUrl;
-    // Provide a global point of access to the instance
-    
-    @Bean
-    public static synchronized Config getInstance() {
-        if (instance == null) {
-            instance = new Config();
-        }
-        return instance;
-    }
+    private String rootDir;
     
     public Config() {
-    	/*
-        if (isRunningInDocker()) {
-        	nodePort = System.getenv("HOST_PORT");
-        	String hname = System.getenv("CONTAINER_NAME");
-        	nodeUrl = "http://" + hname + ":" + nodePort;  // Using application name as the node name
-        	metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
-        } else {
-        	nodeUrl = nodeUrl + ":" + nodePort; // Using value from application.properties
-            //metaNodeUrl = "http://localhost:8080"; // Use localhost for requests
-        }
-        */
     }
+    
     @PostConstruct
     public void postConstruct() {
     	
         if (isRunningInDocker()) {
-        	nodePort = System.getenv("HOST_PORT");
+        	//nodePort = System.getenv("HOST_PORT");
         	String hname = System.getenv("CONTAINER_NAME");
         	nodeUrl = "http://" + hname + ":" + nodePort;  // Using application name as the node name
         	metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
@@ -66,7 +46,7 @@ public class Config {
         	nodeUrl = nodeUrl + ":" + nodePort; // Using value from application.properties
             //metaNodeUrl = "http://localhost:8080"; // Use localhost for requests
         }
-
+        this.rootDir = getAppDirectory() + "/file-storage";
     }
 
 	@Bean
@@ -86,6 +66,10 @@ public class Config {
     
     public String getMetaNodeUrl() {
     	return metaNodeUrl;
+    }
+    
+    public String getRootDir() {
+    	return this.rootDir;
     }
     
     public static String getAppDirectory() {
