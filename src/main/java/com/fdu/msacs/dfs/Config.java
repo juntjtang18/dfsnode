@@ -24,32 +24,41 @@ import java.net.URI;
 @Configuration
 public class Config {
     private static Logger logger = LoggerFactory.getLogger(Config.class);
-    @Value("${dfs.node.url}")
-    private String nodeUrl;
-    @Value("${server.port}")
-    private String nodePort;
-    @Value("${meta.node.url}")
-    private String metaNodeUrl;
     private String rootDir;
 	private String keyStoreFilePath;
 	private String keyStorePassword;
 	private String keyPassword;
 	private String keyAlias;
     
+    //@Value("${meta.node.url}")
+    private String metaNodeUrl;
+	private String containerUrl;
+    private String localUrl;
+    @Value("${server.port}")
+    private String containerPort;			// the port defined in application.properties or passed in setting. the node will listen to this port
+    private String hostPort;			// The port that map to localhost/docker
+    private String containerName;
+    
     public Config() {
     }
     
     @PostConstruct
     public void postConstruct() {
+    	this.setContainerName("");
+    	this.setHostPort("");
     	
         if (isRunningInDocker()) {
-        	//nodePort = System.getenv("HOST_PORT");
-        	String hname = System.getenv("CONTAINER_NAME");
-        	nodeUrl = "http://" + hname + ":" + nodePort;  // Using application name as the node name
-        	metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
+        	String containerName = System.getenv("CONTAINER_NAME");
+        	String hostPort = System.getenv("HOST_PORT");
+        	this.containerUrl = "http://" + containerName + ":" + containerPort;  // Using application name as the node name
+        	this.metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
+        	this.setLocalUrl("http://localhost:" + hostPort);
+        	this.hostPort = hostPort;
         } else {
-        	nodeUrl = nodeUrl + ":" + nodePort; // Using value from application.properties
-            //metaNodeUrl = "http://localhost:8080"; // Use localhost for requests
+        	this.containerUrl = "http://localhost:" + containerPort;
+        	this.metaNodeUrl  = "http://localhost:8080";
+        	this.setLocalUrl("http://localhost:" + containerPort); // Using value from application.properties
+        	this.hostPort     = containerPort;
         }
         this.rootDir = getAppDirectory() + "/file-storage";
         this.keyStoreFilePath = Paths.get(getAppDirectory(),"config","keystore.ks").toString();
@@ -65,12 +74,12 @@ public class Config {
 	    return restTemplate;
 	}
 	
-	public String getPort() {
-    	return nodePort;
+	public String getContainerPort() {
+    	return containerPort;
     }
     
-    public String getNodeUrl() {
-    	return nodeUrl;
+    public String getContainerUrl() {
+    	return containerUrl;
     }
     
     public String getMetaNodeUrl() {
@@ -168,6 +177,30 @@ public class Config {
 
 	public String getKeyPassword() {
 		return this.keyPassword;
+	}
+
+	public String getContainerName() {
+		return containerName;
+	}
+
+	public void setContainerName(String containerName) {
+		this.containerName = containerName;
+	}
+
+	public String getHostPort() {
+		return hostPort;
+	}
+
+	public void setHostPort(String hostPort) {
+		this.hostPort = hostPort;
+	}
+
+	public String getLocalUrl() {
+		return localUrl;
+	}
+
+	public void setLocalUrl(String localUrl) {
+		this.localUrl = localUrl;
 	}
 
 

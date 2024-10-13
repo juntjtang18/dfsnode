@@ -15,6 +15,7 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.fdu.msacs.dfs.Config;
+import com.fdu.msacs.dfs.metanode.DfsNode;
 
 import jakarta.annotation.PostConstruct;
 
@@ -49,7 +50,7 @@ public class FileService {
     @PostConstruct
     public void postContruction() {
     	this.rootDir = Paths.get(config.getRootDir()); 
-    	this.nodeUrl = config.getNodeUrl();
+    	this.nodeUrl = config.getContainerUrl();
     	this.metaNodeUrl = config.getMetaNodeUrl();
     }
     
@@ -118,18 +119,18 @@ public class FileService {
         request.setFilename(filename);
         request.setRequestingNodeUrl(this.nodeUrl);
         HttpEntity<RequestReplicationNodes> requestEntity = new HttpEntity<>(request);
-        ResponseEntity<List<String>> nodeListResponse = restTemplate.exchange(
+        ResponseEntity<List<DfsNode>> nodeListResponse = restTemplate.exchange(
                 metaNodeUrl + "/metadata/get-replication-nodes", 
                 HttpMethod.POST, 
                 requestEntity, 
-                new ParameterizedTypeReference<List<String>>() {}
+                new ParameterizedTypeReference<List<DfsNode>>() {}
         );
-        List<String> replicationNodes = nodeListResponse.getBody();
-        logger.debug("The nodes to replicate to: {}", replicationNodes);
+        List<DfsNode> replicationNodes = nodeListResponse.getBody();
+        logger.info("The nodes to replicate to: {}", replicationNodes);
 
         // 4. Replicate the file to the retrieved nodes
-        for (String nodeUrl : replicationNodes) {
-            logger.info("Replicating file to node: {}", nodeUrl);
+        for (DfsNode node : replicationNodes) {
+            logger.info("Replicating file to node: {}", node);
 
             // Use FileSystemResource to replicate the file
             File fileToReplicate = new File(localFilePath);
@@ -142,7 +143,7 @@ public class FileService {
             HttpEntity<MultiValueMap<String, Object>> requestEntityForReplication = new HttpEntity<>(body);
 
             // Send the FileSystemResource to the replication node and capture the response
-            ResponseEntity<String> replicationResponse = restTemplate.postForEntity(nodeUrl + "/dfs/replicate", requestEntityForReplication, String.class);
+            ResponseEntity<String> replicationResponse = restTemplate.postForEntity(node.getContainerUrl() + "/dfs/replicate", requestEntityForReplication, String.class);
 
             // Log the result of the replication
             if (replicationResponse.getStatusCode().is2xxSuccessful()) {

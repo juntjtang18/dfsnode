@@ -8,17 +8,12 @@ import java.nio.file.Paths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.ApplicationContext;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
-import com.fdu.msacs.dfs.server.RequestNode;
-
+import com.fdu.msacs.dfs.metanode.DfsNode;
 import jakarta.annotation.PostConstruct;
 
 @SpringBootApplication
@@ -35,24 +30,27 @@ public class DFSNodeApp {
  	
 	@PostConstruct
 	public void registerNodeWithMetadataService() {
-		logger.info("Config instalizing... at node {}:{}", config.getNodeUrl(), config.getPort());
+		logger.info("Config instalizing... at node {}", config.getContainerUrl());
 		
-	    String nodeUrl = config.getNodeUrl();
+		String localUrl = config.getLocalUrl();
+	    String containerUrl = config.getContainerUrl();
 	    String metaUrl = config.getMetaNodeUrl();
+		logger.info("ContainerUrl: {}", containerUrl);
+		logger.info("localUrl:     {}", localUrl);
+		logger.info("metaNodeUrl:  {}", metaUrl);
 	    
-	    logger.info("Registering node {} to MetaNode at: {}", nodeUrl, metaUrl);
+	    logger.info("Registering node {} to MetaNode at: {}", containerUrl, metaUrl);
 
 	    try {
 		    createDfsFileRoot();
+	        DfsNode dfsNode = new DfsNode(containerUrl, localUrl);
 
-		    RequestNode request = new RequestNode();
-	        request.setNodeUrl(nodeUrl);
-	        
+	        // Send POST request to register the node
 	        ResponseEntity<String> response = restTemplate.postForEntity(
 	        		metaUrl + "/metadata/register-node", 
-	                request, 
+	                dfsNode, 
 	                String.class);
-
+	        
 	        if (response.getStatusCode().is2xxSuccessful()) {
 	            logger.info("Node successfully registered. Server response: {}", response.getBody());
 	            return;
