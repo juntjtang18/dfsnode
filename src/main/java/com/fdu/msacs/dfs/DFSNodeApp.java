@@ -16,7 +16,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
-import com.fdu.msacs.dfs.server.Config;
+
 import com.fdu.msacs.dfs.server.RequestNode;
 
 import jakarta.annotation.PostConstruct;
@@ -56,7 +56,10 @@ public class DFSNodeApp {
 	        if (response.getStatusCode().is2xxSuccessful()) {
 	            logger.info("Node successfully registered. Server response: {}", response.getBody());
 	            return;
-	        } else {
+	        } else if (response.getStatusCode().is4xxClientError()){
+	            logger.error("Failed to register node. Server returned status: {}", response.getStatusCode());
+	            return;	        	
+	    	} else {
 	            logger.error("Failed to register node. Server returned status: {}", response.getStatusCode());
 	            return;
 	        }

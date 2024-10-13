@@ -13,6 +13,9 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.fdu.msacs.dfs.Config;
+
 import jakarta.annotation.PostConstruct;
 
 import java.io.File;
@@ -49,12 +52,29 @@ public class FileService {
     	this.nodeUrl = config.getNodeUrl();
     	this.metaNodeUrl = config.getMetaNodeUrl();
     }
-
+    
+    /*
+     *  /metadata/register-file-location
+     *  save locally
+     * 
+     */
     public String saveFile(MultipartFile file) throws IOException {
         logger.info("saveFile(...) called...");
         
         String filename = file.getOriginalFilename();
         logger.info("Original filename: {}", filename);
+        
+        // 2. Register the file with the metadata node
+        String currentNodeUrl = nodeUrl; 
+        String restUrl = metaNodeUrl + "/metadata/register-file-location";
+        logger.info("Register file location REST URL: {}", restUrl);
+
+        RequestFileLocation requestFileLocation = new RequestFileLocation(filename, currentNodeUrl);
+        ResponseEntity<String> response = restTemplate.postForEntity(restUrl, requestFileLocation, String.class);
+
+        if (!response.getStatusCode().is2xxSuccessful()) {
+            throw new IOException("Failed to register file with metadata server");
+        }
         
         // Sanitize the filename
         if (filename != null) {
@@ -79,26 +99,19 @@ public class FileService {
         return filePath.toString();
     }
 
-
+    /*
+     * save it locally, 
+     * then  
+     *      /metadata/get-replication-nodes,
+     *      /dfs/replicate to all nodes returned 
+     */
     public void saveFileAndReplicate(MultipartFile file) throws IOException {
         logger.info("Saving file locally and starting replication...");
 
         // 1. Save the file locally and get the local file path
         String localFilePath = saveFile(file); // Assuming this method returns the path of the saved file
 
-        // 2. Register the file with the metadata node
         String filename = file.getOriginalFilename();
-        String currentNodeUrl = nodeUrl; 
-
-        String restUrl = metaNodeUrl + "/metadata/register-file-location";
-        logger.info("Register file location REST URL: {}", restUrl);
-
-        RequestFileLocation requestFileLocation = new RequestFileLocation(filename, currentNodeUrl);
-        ResponseEntity<String> response = restTemplate.postForEntity(restUrl, requestFileLocation, String.class);
-
-        if (!response.getStatusCode().is2xxSuccessful()) {
-            throw new IOException("Failed to register file with metadata server");
-        }
 
         // 3. Get the list of nodes to replicate the file to
         RequestReplicationNodes request = new RequestReplicationNodes();

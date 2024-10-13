@@ -1,4 +1,4 @@
-package com.fdu.msacs.dfs.server;
+package com.fdu.msacs.dfs;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,10 @@ public class Config {
     @Value("${meta.node.url}")
     private String metaNodeUrl;
     private String rootDir;
+	private String keyStoreFilePath;
+	private String keyStorePassword;
+	private String keyPassword;
+	private String keyAlias;
     
     public Config() {
     }
@@ -47,6 +52,10 @@ public class Config {
             //metaNodeUrl = "http://localhost:8080"; // Use localhost for requests
         }
         this.rootDir = getAppDirectory() + "/file-storage";
+        this.keyStoreFilePath = Paths.get(getAppDirectory(),"config","keystore.ks").toString();
+        this.keyStorePassword = "password";
+        this.keyPassword      = "password";
+        this.keyAlias         = "alias";
     }
 
 	@Bean
@@ -143,6 +152,22 @@ public class Config {
 	        logger.info("Could not read cgroup file. ");
 	    }
 	    return cgroup.contains("docker") || cgroup.contains("kubepods");
+	}
+
+	public String getKeyStoreFilePath() {
+		return this.keyStoreFilePath;
+	}
+
+	public String getKeyAlias() {
+		return this.keyAlias;
+	}
+
+	public String getKeyStorePassword() {
+		return this.keyStorePassword;
+	}
+
+	public String getKeyPassword() {
+		return this.keyPassword;
 	}
 
 
