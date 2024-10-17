@@ -34,7 +34,7 @@ class BlockStorageTest {
         byte[] blockData = "Test Data".getBytes();
 
         // Store the block
-        blockStorage.storeBlock(hash, blockData, false);
+        blockStorage.saveBlock(hash, blockData, false);
 
         // Verify that the block was stored correctly
         byte[] readData = blockStorage.readBlock(hash);
@@ -55,7 +55,7 @@ class BlockStorageTest {
         Mockito.when(mockEncryptor.decrypt(encryptedData)).thenReturn(blockData);
 
         // Store the block with encryption
-        blockStorage.storeBlock(hash, blockData, true);
+        blockStorage.saveBlock(hash, blockData, true);
 
         // Verify that the block was stored correctly
         byte[] readData = blockStorage.readBlock(hash);
@@ -74,10 +74,10 @@ class BlockStorageTest {
         byte[] dataB2 = "Block B2 Data".getBytes();
 
         // Store the first block (b1)
-        blockStorage.storeBlock(hashB1, dataB1, false);
+        blockStorage.saveBlock(hashB1, dataB1, false);
 
         // Store the second block (b2)
-        blockStorage.storeBlock(hashB2, dataB2, false);
+        blockStorage.saveBlock(hashB2, dataB2, false);
 
         // Verify that both blocks can be read correctly and referenceCount starts at 1
         byte[] readDataB1 = blockStorage.readBlock(hashB1);
@@ -90,7 +90,7 @@ class BlockStorageTest {
         assertEquals(1, blockStorage.getReferenceCount(hashB2), "Reference count for B2 should be 1.");
 
         // Store block B2 again to simulate another reference
-        blockStorage.storeBlock(hashB2, dataB2, false);
+        blockStorage.saveBlock(hashB2, dataB2, false);
 
         // Verify that referenceCount for B2 is now 2
         assertEquals(2, blockStorage.getReferenceCount(hashB2), "Reference count for B2 should be 2 after storing it again.");
@@ -129,7 +129,7 @@ class BlockStorageTest {
 
         // Store multiple blocks
         for (int i = 0; i < hashes.length; i++) {
-            blockStorage.storeBlock(hashes[i], blockDataArray[i], false);
+            blockStorage.saveBlock(hashes[i], blockDataArray[i], false);
         }
 
         // Read back each block and verify data

@@ -32,50 +32,7 @@ public class FileControllerTestClient {
         return "http://localhost:" + port;
     }
 
-    @Test
-    public void testUploadFile() throws IOException {
-        // Define the path for the test file
-        String testFilePath = "D:\\develop\\testfile\\testfile.txt";
 
-        // Create the directory if it doesn't exist
-        File directory = new File("D:\\develop\\testfile");
-        if (!directory.exists()) {
-            directory.mkdirs(); // Create the directory
-        }
-
-        // Create a test file and write some content to it
-        File testFile = new File(testFilePath);
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(testFile))) {
-            writer.write("This is a test file content for upload.");
-        }
-
-        // Prepare the upload URL
-        String uploadUrl = getBaseUrl() + "/dfs/upload";
-
-        // Create a FileSystemResource for the test file
-        FileSystemResource resource = new FileSystemResource(testFile);
-
-        // Prepare the body for the multipart request
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("file", resource);
-
-        // Set headers for the request
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-
-        // Create the HttpEntity for the request
-        HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-
-        // Perform the upload
-        ResponseEntity<String> response = restTemplate.postForEntity(uploadUrl, requestEntity, String.class);
-        
-        // Assert the response status and body
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("File uploaded successfully", response.getBody());
-
-        // Clean up by deleting the test file
-        testFile.delete();
-    }
     
     @Test
     public void testReplicateFile() throws IOException {

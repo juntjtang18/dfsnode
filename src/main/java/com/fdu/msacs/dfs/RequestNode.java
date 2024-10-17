@@ -1,4 +1,4 @@
-package com.fdu.msacs.dfs.server;
+package com.fdu.msacs.dfs;
 
 public class RequestNode {
 	String nodeUrl;

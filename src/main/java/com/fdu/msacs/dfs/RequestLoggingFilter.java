@@ -1,4 +1,4 @@
-package com.fdu.msacs.dfs.server;
+package com.fdu.msacs.dfs;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

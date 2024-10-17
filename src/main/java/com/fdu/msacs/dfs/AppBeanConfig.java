@@ -4,9 +4,10 @@ import javax.crypto.SecretKey;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
 
+import com.fdu.msacs.dfs.bfs.BlockStorage;
 import com.fdu.msacs.dfs.bfs.EncryptorAES;
-import com.fdu.msacs.dfs.server.KeyStoreManager;
 
 @Configuration
 
@@ -25,5 +26,18 @@ public class AppBeanConfig {
     @Bean
     public EncryptorAES encryptorAES(SecretKey secretKey) {
         return new EncryptorAES(secretKey); // Create EncryptorAES bean with injected SecretKey
+    }
+    
+    @Bean
+    public BlockStorage blockStorage(EncryptorAES encryptor) {
+    	String rootdir = Config.getAppDir();
+    	return new BlockStorage(encryptor, rootdir);
+    }
+    
+    @Bean
+    public BlockService blockService(RestTemplate restTemp, BlockStorage blockStorage) {
+    	String metaUrl = "http://localhost:8080";
+    	BlockService blockService = new BlockService(restTemp, blockStorage, metaUrl);
+    	return blockService;
     }
 }

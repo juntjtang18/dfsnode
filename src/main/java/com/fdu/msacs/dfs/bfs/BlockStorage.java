@@ -1,24 +1,29 @@
 package com.fdu.msacs.dfs.bfs;
 
-import java.io.*;
-import java.nio.file.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.RandomAccessFile;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.NoSuchAlgorithmException;
 import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
-import com.fdu.msacs.dfs.server.FileController;
+import com.fdu.msacs.dfs.FileController;
 
 public class BlockStorage {
     private static final Logger logger = LoggerFactory.getLogger(FileController.class);
-    private final Encryptor encryptor;
+    private Encryptor encryptor;
     private String rootDir;
     
     public BlockStorage(Encryptor encryptor, String rootDir) {
-        this.encryptor = encryptor;
         this.rootDir = rootDir;
+        this.encryptor = encryptor;
         initializeDirectoryStructure();
     }
 
@@ -33,7 +38,7 @@ public class BlockStorage {
         }
     }
 
-    public void storeBlock(String hash, byte[] blockData, boolean encrypt) throws IOException, NoSuchAlgorithmException {
+    public void saveBlock(String hash, byte[] blockData, boolean encrypt) throws IOException, NoSuchAlgorithmException {
         String blockFilePath = getBlockFilePath(hash);
         String indexFilePath = getIndexFilePath(hash);
         
@@ -210,7 +215,7 @@ public class BlockStorage {
         return Paths.get(rootDir, hash.substring(0, 2), hash.substring(2, 4), hash.substring(4, 6), hash.substring(6,8) + ".idx").toString();
     }
 
-    private String getBlockFilePath(String hash) {
+    public String getBlockFilePath(String hash) {
         return Paths.get(rootDir, hash.substring(0, 2), hash.substring(2, 4), hash.substring(4, 6), hash.substring(6,8) + ".bfs").toString();
     }
 

@@ -1,4 +1,4 @@
-package com.fdu.msacs.dfs.server;
+package com.fdu.msacs.dfs;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +14,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import com.fdu.msacs.dfs.Config;
+import com.fdu.msacs.dfs.bfs.BlockStorage;
 import com.fdu.msacs.dfs.metanode.DfsNode;
 
 import jakarta.annotation.PostConstruct;
@@ -36,7 +36,8 @@ public class FileService {
     private RestTemplate restTemplate;
     private String nodeUrl;
     private String metaNodeUrl;
-    
+    @Autowired
+    private BlockStorage blockStorage;
     @Autowired
     private Config config;
 

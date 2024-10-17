@@ -3,10 +3,7 @@ package com.fdu.msacs.dfs;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
-import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
-import com.fdu.msacs.dfs.server.ByteArrayHttpMessageConverter;
 
 import jakarta.annotation.PostConstruct;
 
@@ -15,8 +12,6 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.net.URI;
@@ -44,24 +39,24 @@ public class Config {
     
     @PostConstruct
     public void postConstruct() {
-    	this.setContainerName("");
-    	this.setHostPort("");
+    	this.containerName = "";
+    	this.hostPort = "";
     	
         if (isRunningInDocker()) {
         	String containerName = System.getenv("CONTAINER_NAME");
         	String hostPort = System.getenv("HOST_PORT");
         	this.containerUrl = "http://" + containerName + ":" + containerPort;  // Using application name as the node name
         	this.metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
-        	this.setLocalUrl("http://localhost:" + hostPort);
+        	this.localUrl = "http://localhost:" + hostPort;
         	this.hostPort = hostPort;
         } else {
         	this.containerUrl = "http://localhost:" + containerPort;
         	this.metaNodeUrl  = "http://localhost:8080";
-        	this.setLocalUrl("http://localhost:" + containerPort); // Using value from application.properties
+        	this.localUrl = "http://localhost:" + containerPort; // Using value from application.properties
         	this.hostPort     = containerPort;
         }
-        this.rootDir = getAppDirectory() + "/file-storage";
-        this.keyStoreFilePath = Paths.get(getAppDirectory(),"config","keystore.ks").toString();
+        this.rootDir = getAppDir() + "/file-storage";
+        this.keyStoreFilePath = Paths.get(getAppDir(),"config","keystore.ks").toString();
         this.keyStorePassword = "password";
         this.keyPassword      = "password";
         this.keyAlias         = "alias";
@@ -90,7 +85,7 @@ public class Config {
     	return this.rootDir;
     }
     
-    public static String getAppDirectory() {
+    public static String getAppDir() {
         try {
             // Get the path of the running class or JAR
             String jarPath = Config.class.getProtectionDomain().getCodeSource().getLocation().toString();
@@ -111,7 +106,7 @@ public class Config {
             }
 
             // Call helper method to handle the app directory logic
-            return handleAppDirectory(jarFile);
+            return handleAppDir(jarFile);
 
         } catch (URISyntaxException | IllegalArgumentException e) {
             logger.error("Failed to get app directory", e);
@@ -119,7 +114,7 @@ public class Config {
         }
     }
 
-    private static String handleAppDirectory(File jarFile) {
+    private static String handleAppDir(File jarFile) {
         // Get the parent directory of the JAR file
         File jarDir = jarFile.getParentFile();
 
@@ -183,25 +178,25 @@ public class Config {
 		return containerName;
 	}
 
-	public void setContainerName(String containerName) {
-		this.containerName = containerName;
-	}
+	//public void setContainerName(String containerName) {
+	//	this.containerName = containerName;
+	//}
 
 	public String getHostPort() {
 		return hostPort;
 	}
 
-	public void setHostPort(String hostPort) {
-		this.hostPort = hostPort;
-	}
+	//public void setHostPort(String hostPort) {
+	//	this.hostPort = hostPort;
+	//}
 
 	public String getLocalUrl() {
 		return localUrl;
 	}
 
-	public void setLocalUrl(String localUrl) {
-		this.localUrl = localUrl;
-	}
+	//public void setLocalUrl(String localUrl) {
+	//	this.localUrl = localUrl;
+	//}
 
 
 }

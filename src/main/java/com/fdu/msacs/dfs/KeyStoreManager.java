@@ -1,4 +1,4 @@
-package com.fdu.msacs.dfs.server;
+package com.fdu.msacs.dfs;
 
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
@@ -7,8 +7,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.security.KeyStore;
 import org.springframework.stereotype.Component;
-
-import com.fdu.msacs.dfs.Config;
 
 @Component
 public class KeyStoreManager {
