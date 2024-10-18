@@ -1,10 +1,13 @@
 package com.fdu.msacs.dfs;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import com.fdu.msacs.dfs.bfs.BlockStorage;
+import com.fdu.msacs.dfs.BlockController.RequestStoreBlock;
+import com.fdu.msacs.dfs.HashUtil; // Import the HashUtil class
 
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
@@ -12,53 +15,82 @@ import org.springframework.http.ResponseEntity;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 public class BlockService {
-    private final RestTemplate restTemplate;
-    private final BlockStorage blockStorage;
-    private final String metaNodeUrl;
+    @Autowired
+    private RestTemplate restTemplate;
 
-    public BlockService(RestTemplate restTemplate, BlockStorage blockStorage, String metaNodeUrl) {
-        this.restTemplate = restTemplate;
-        this.blockStorage = blockStorage;
-        this.metaNodeUrl = metaNodeUrl;
-    }
+    @Autowired
+    private BlockStorage blockStorage;
 
-    public boolean checkAndStoreBlock(String hash, byte[] block) throws NoSuchAlgorithmException, IOException {
-        // Step 1: Check if the block already exists on the meta node
-        if (!doesBlockNeedToSave(hash)) {
-            // Step 2: Save the block locally using BlockStorage methods
-            blockStorage.saveBlock(hash, block, false);
+    @Autowired
+    private Config config;
 
-            // Step 3: Register the block location on the meta node
-            registerBlockLocation(hash);
-            
-            return true; // Block was stored and registered
+    public String checkAndStoreBlock(byte[] block) throws NoSuchAlgorithmException, IOException {
+        // Calculate the hash of the block using the HashUtil
+        String hash = HashUtil.calculateHash(block);
+
+        // Step 1: Get the nodes responsible for the block from the meta node
+        List<String> nodes = getNodesForBlock(hash);
+        if (nodes == null || nodes.isEmpty()) {
+            throw new IllegalStateException("No nodes found for the block with hash: " + hash);
         }
 
-        return false; // Block already exists; no further action taken
+        // Step 2: Process each node
+        for (String nodeUrl : nodes) {
+            if (isCurrentNode(nodeUrl)) {
+                // Current node: Save the block locally and register its location
+                blockStorage.saveBlock(hash, block, false);
+                registerBlockLocation(hash);
+            } else {
+                // Not the current node: Store the block remotely
+                storeBlockOnRemoteNode(nodeUrl, hash, block);
+            }
+        }
+
+        return hash; // Return the hash of the stored block
     }
 
-    private boolean doesBlockNeedToSave(String hash) {
-        // Construct the URL to check block existence
-        String url = String.format("%s/metadata/block-exists/%s", metaNodeUrl, hash);
+    private List<String> getNodesForBlock(String hash) {
+        String url = String.format("%s/metadata/nodes-for-block", config.getMetaNodeUrl());
+
+        // Create a request object
+        RequestNodesForBlock request = new RequestNodesForBlock();
+        request.setHash(hash);
+        request.setNodeUrl(config.getContainerUrl()); // Set the nodeUrl as well
 
         try {
-            ResponseEntity<Set<String>> response = restTemplate.exchange(
+            ResponseEntity<List<String>> response = restTemplate.exchange(
                 url,
-                HttpMethod.GET,
-                null,
-                new ParameterizedTypeReference<Set<String>>() {}
+                HttpMethod.POST,
+                new HttpEntity<>(request), // Set the request body
+                new ParameterizedTypeReference<List<String>>() {}
             );
 
-            Set<String> nodeUrls = response.getBody();
-            return nodeUrls != null && !nodeUrls.isEmpty();
+            return response.getBody();
         } catch (Exception e) {
-            // Handle exception (log error, rethrow, or handle gracefully)
             e.printStackTrace();
-            return false; // Assume block does not exist in case of an error
+            return new ArrayList<String>(); // Return null in case of an error
+        }
+    }
+
+
+    private boolean isCurrentNode(String nodeUrl) {
+        return config.getContainerUrl().equals(nodeUrl);
+    }
+
+    private void storeBlockOnRemoteNode(String nodeUrl, String hash, byte[] block) {
+        String url = String.format("%s/dfs/block/store", nodeUrl);
+        RequestStoreBlock request = new RequestStoreBlock(hash, block);
+
+        try {
+            HttpEntity<RequestStoreBlock> requestEntity = new HttpEntity<>(request);
+            restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
+        } catch (Exception e) {
+            e.printStackTrace(); // Handle exception as needed
         }
     }
 
@@ -66,80 +98,60 @@ public class BlockService {
         // Prepare the request object
         RequestBlockNode request = new RequestBlockNode();
         request.setHash(hash);
-        request.setNodeUrl(getNodeUrl());
+        request.setNodeUrl(config.getContainerUrl());
 
         // Construct the URL for block registration
-        String url = String.format("%s/metadata/register-block-location", metaNodeUrl);
+        String url = String.format("%s/metadata/register-block-location", config.getMetaNodeUrl());
 
         try {
             HttpEntity<RequestBlockNode> requestEntity = new HttpEntity<>(request);
             restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
         } catch (Exception e) {
-            // Handle exception (log error, rethrow, or handle gracefully)
-            e.printStackTrace();
+            e.printStackTrace(); // Handle exception as needed
         }
     }
-    
+
     public void unregisterBlock(String hash) {
-        // Construct the URL for unregistering the block
-        String url = String.format("%s/metadata/unregister-block/%s", metaNodeUrl, hash);
+        String url = String.format("%s/metadata/unregister-block/%s", config.getMetaNodeUrl(), hash);
 
         try {
             restTemplate.exchange(url, HttpMethod.DELETE, null, String.class);
         } catch (Exception e) {
-            // Handle exception (log error, rethrow, or handle gracefully)
-            e.printStackTrace();
+            e.printStackTrace(); // Handle exception as needed
         }
     }
-    
-    private String getNodeUrl() {
-        // This method should return the URL of the current node, which might be
-        // configured or dynamically determined.
-        return "http://localhost:8080"; // Example URL, adjust as needed
-    }
-    
-    // inner class for request
+
+    // Inner class for request
     public static class RequestBlockNode {
         private String hash;
         private String nodeUrl;
 
         // Getters and Setters
-        public String getHash() {
-            return hash;
-        }
-
-        public void setHash(String hash) {
-            this.hash = hash;
-        }
-
-        public String getNodeUrl() {
-            return nodeUrl;
-        }
-
-        public void setNodeUrl(String nodeUrl) {
-            this.nodeUrl = nodeUrl;
-        }
+        public String getHash() 			{            return hash;        }
+        public void setHash(String hash) 	{            this.hash = hash;        }
+        public String getNodeUrl() 			{            return nodeUrl;        }
+        public void setNodeUrl(String nodeUrl) {            this.nodeUrl = nodeUrl;        }
     }
-    
+
     public static class RequestUnregisterBlock {
         public String hash;
         public String nodeUrl;
 
         // Getters and Setters
-        public String getHash() {
-            return hash;
-        }
+        public String getHash() {            return hash;        }
+        public void setHash(String hash) {            this.hash = hash;        }
+        public String getNodeUrl() {            return nodeUrl;        }
+        public void setNodeUrl(String nodeUrl) {            this.nodeUrl = nodeUrl;        }
+    }
+ // Inner class to represent the request body
+    public static class RequestNodesForBlock {
+        private String hash;
+        private String nodeUrl;
 
-        public void setHash(String hash) {
-            this.hash = hash;
-        }
-
-        public String getNodeUrl() {
-            return nodeUrl;
-        }
-
-        public void setNodeUrl(String nodeUrl) {
-            this.nodeUrl = nodeUrl;
-        }
+        // Getters and Setters
+        public String getHash() {            return hash;        }
+        public void setHash(String hash) {            this.hash = hash;        }
+        public String getNodeUrl() {            return nodeUrl;        }
+        public void setNodeUrl(String nodeUrl) {            this.nodeUrl = nodeUrl;        }
     }
 }

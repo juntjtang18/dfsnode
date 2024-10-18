@@ -37,7 +37,7 @@ public class FileService {
     private String nodeUrl;
     private String metaNodeUrl;
     @Autowired
-    private BlockStorage blockStorage;
+    private BlockService blockService;
     @Autowired
     private Config config;
 

@@ -11,12 +11,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.web.client.RestTemplate;
 
 import com.fdu.msacs.dfs.metanode.DfsNode;
 import jakarta.annotation.PostConstruct;
 
 @SpringBootApplication
+@EnableScheduling
 public class DFSNodeApp {
     private static final Logger logger = LoggerFactory.getLogger(DFSNodeApp.class);
     private RestTemplate restTemplate = new RestTemplate();
@@ -39,34 +42,46 @@ public class DFSNodeApp {
 		logger.info("localUrl:     {}", localUrl);
 		logger.info("metaNodeUrl:  {}", metaUrl);
 	    
-	    logger.info("Registering node {} to MetaNode at: {}", containerUrl, metaUrl);
 
 	    try {
 		    createDfsFileRoot();
-	        DfsNode dfsNode = new DfsNode(containerUrl, localUrl);
-
-	        // Send POST request to register the node
-	        ResponseEntity<String> response = restTemplate.postForEntity(
-	        		metaUrl + "/metadata/register-node", 
-	                dfsNode, 
-	                String.class);
+		    
+		    logger.info("Registering node {} to MetaNode at: {}", containerUrl, metaUrl);
+	        heartbeatToMetaNode();
 	        
-	        if (response.getStatusCode().is2xxSuccessful()) {
-	            logger.info("Node successfully registered. Server response: {}", response.getBody());
-	            return;
-	        } else if (response.getStatusCode().is4xxClientError()){
-	            logger.error("Failed to register node. Server returned status: {}", response.getStatusCode());
-	            return;	        	
-	    	} else {
-	            logger.error("Failed to register node. Server returned status: {}", response.getStatusCode());
-	            return;
-	        }
 	    } catch (Exception e) {
 	        logger.error("An error occurred during node registration", e);
 	        return;
 	    }
 	}
+	
+    @Scheduled(fixedRateString = "${dfs.node.heartbeat.rate:60000}") // Default to 10 seconds
+    public void heartbeatToMetaNode() {
+        String containerUrl = config.getContainerUrl();
+        String localUrl = config.getLocalUrl();
+        String metaUrl = config.getMetaNodeUrl();
 
+        DfsNode dfsNode = new DfsNode(containerUrl, localUrl);
+        
+        logger.info("Sending heartbeat to MetaNode at: {}", metaUrl);
+        
+        try {
+            // Send POST request to register the node
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                metaUrl + "/metadata/register-node", 
+                dfsNode, 
+                String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                logger.info("Heartbeat successful. Server response: {}", response.getBody());
+            } else {
+                logger.error("Failed to send heartbeat. Server returned status: {}", response.getStatusCode());
+            }
+        } catch (Exception e) {
+            logger.error("An error occurred during heartbeat to MetaNode", e);
+        }
+    }
+    
 	/**
 	 * Check if the application is running inside a Docker container.
 	 * @return true if running in a Docker container, false otherwise.

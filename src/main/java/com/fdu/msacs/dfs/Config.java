@@ -30,7 +30,7 @@ public class Config {
 	private String containerUrl;
     private String localUrl;
     @Value("${server.port}")
-    private String containerPort;			// the port defined in application.properties or passed in setting. the node will listen to this port
+    private String containerPort;		// the port defined in application.properties or passed in setting. the node will listen to this port
     private String hostPort;			// The port that map to localhost/docker
     private String containerName;
     
@@ -115,25 +115,19 @@ public class Config {
     }
 
     private static String handleAppDir(File jarFile) {
-        // Get the parent directory of the JAR file
         File jarDir = jarFile.getParentFile();
 
-        // Check if we're running from class files in Eclipse (./target/classes)
         if (jarDir != null && jarDir.getName().equals("classes")) {
-            // Navigate up two levels to reach ./target
             jarDir = jarDir.getParentFile(); // Go to target
         }
 
-        // Default to a fallback directory if jarDir is null or doesn't exist (e.g., in a container)
         if (jarDir == null || !jarDir.exists()) {
             logger.warn("Jar directory is null or does not exist: {}", jarDir);
             jarDir = new File("/app"); // Fallback to /app in a container environment
         }
 
-        // Create the "dfs" directory within the jarDir
         File dfsDir = new File(jarDir, "dfs");
 
-        // Create the directory if it doesn't exist
         if (!dfsDir.exists()) {
             boolean created = dfsDir.mkdirs();
             if (!created) {

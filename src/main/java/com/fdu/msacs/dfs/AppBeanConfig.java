@@ -34,10 +34,4 @@ public class AppBeanConfig {
     	return new BlockStorage(encryptor, rootdir);
     }
     
-    @Bean
-    public BlockService blockService(RestTemplate restTemp, BlockStorage blockStorage) {
-    	String metaUrl = "http://localhost:8080";
-    	BlockService blockService = new BlockService(restTemp, blockStorage, metaUrl);
-    	return blockService;
-    }
 }
