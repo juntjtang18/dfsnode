@@ -14,6 +14,9 @@ RUN ./mvnw dependency:go-offline
 
 # Copy the rest of the application code
 COPY src ./src
+ENV CONTAINER_NAME=localhost
+ENV META_NODE_URL=http://localhost:8080
+ENV RUNTIME_MODE=PRODUCT
 
 # Build the application
 RUN ./mvnw clean install

@@ -2,7 +2,6 @@ package com.fdu.msacs.dfs.bfs;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.RandomAccessFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,8 +11,6 @@ import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
-
 import com.fdu.msacs.dfs.FileController;
 
 public class BlockStorage {

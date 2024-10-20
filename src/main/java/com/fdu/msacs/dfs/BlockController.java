@@ -11,25 +11,20 @@ import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
 
 @RestController
-@RequestMapping("/dfs/block")
 public class BlockController {
 
     @Autowired
     private BlockService blockService;
 
-    @Autowired
-    private BlockStorage blockStorage;
-
     // Endpoint to store a block
-    @PostMapping("/store")
+    @PostMapping("/dfs/block/store")
     public ResponseEntity<String> storeBlock(@RequestBody RequestStoreBlock requestStoreBlock) {
         try {
             // Save the block locally using BlockStorage
             String hash = requestStoreBlock.getHash(); // Get the hash from the request
             byte[] block = requestStoreBlock.getBlock(); // Get the block data from the request
             
-            // Use BlockStorage to save the block locally
-            blockStorage.saveBlock(hash, block, false); // Assuming false indicates no overwrite
+            blockService.storeBlockLocally(hash, block, false);
             
             return ResponseEntity.status(HttpStatus.CREATED).body("Block stored successfully with hash: " + hash);
         } catch (NoSuchAlgorithmException | IOException e) {

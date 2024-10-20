@@ -34,19 +34,9 @@ public class DFSNodeApp {
 	@PostConstruct
 	public void registerNodeWithMetadataService() {
 		logger.info("Config instalizing... at node {}", config.getContainerUrl());
-		
-		String localUrl = config.getLocalUrl();
-	    String containerUrl = config.getContainerUrl();
-	    String metaUrl = config.getMetaNodeUrl();
-		logger.info("ContainerUrl: {}", containerUrl);
-		logger.info("localUrl:     {}", localUrl);
-		logger.info("metaNodeUrl:  {}", metaUrl);
-	    
-
 	    try {
 		    createDfsFileRoot();
 		    
-		    logger.info("Registering node {} to MetaNode at: {}", containerUrl, metaUrl);
 	        heartbeatToMetaNode();
 	        
 	    } catch (Exception e) {
@@ -62,7 +52,7 @@ public class DFSNodeApp {
         String metaUrl = config.getMetaNodeUrl();
 
         DfsNode dfsNode = new DfsNode(containerUrl, localUrl);
-        
+	    logger.info("Registering node {} to MetaNode at: {}", containerUrl, metaUrl);
         logger.info("Sending heartbeat to MetaNode at: {}", metaUrl);
         
         try {

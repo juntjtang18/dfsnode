@@ -1,8 +1,10 @@
 package com.fdu.msacs.dfs;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestTemplate;
 
 import jakarta.annotation.PostConstruct;
@@ -19,42 +21,61 @@ import java.net.URI;
 @Configuration
 public class Config {
     private static Logger logger = LoggerFactory.getLogger(Config.class);
+    @Autowired
+    private Environment environment;
     private String rootDir;
 	private String keyStoreFilePath;
 	private String keyStorePassword;
 	private String keyPassword;
 	private String keyAlias;
-    
-    //@Value("${meta.node.url}")
     private String metaNodeUrl;
 	private String containerUrl;
     private String localUrl;
-    @Value("${server.port}")
-    private String containerPort;		// the port defined in application.properties or passed in setting. the node will listen to this port
-    private String hostPort;			// The port that map to localhost/docker
     private String containerName;
+    @Value("${server.port:8081}") // Default to 8081 if not set
+    private String serverPort;
+    private Boolean runningInDocker;
     
     public Config() {
     }
     
     @PostConstruct
     public void postConstruct() {
-    	this.containerName = "";
-    	this.hostPort = "";
+    	logger.info("postCostruct of Cofig...");
     	
-        if (isRunningInDocker()) {
-        	String containerName = System.getenv("CONTAINER_NAME");
-        	String hostPort = System.getenv("HOST_PORT");
-        	this.containerUrl = "http://" + containerName + ":" + containerPort;  // Using application name as the node name
-        	this.metaNodeUrl = "http://dfs-meta-node:8080"; // Use container name for requests
-        	this.localUrl = "http://localhost:" + hostPort;
-        	this.hostPort = hostPort;
+        String runtimeMode = System.getenv("RUNTIME_MODE");
+        String containerName = System.getenv("CONTAINER_NAME");
+        String hostPort = System.getenv("HOST_PORT");
+
+        // Check if `local.server.port` is available (indicating a test environment with a random port)
+        String testPort = environment.getProperty("local.server.port");
+    	
+        runningInDocker = false;
+
+        if ("PRODUCT".equalsIgnoreCase(runtimeMode)) {
+        	runningInDocker = true;
+            // Production mode: Running in a container
+            metaNodeUrl = "http://dfs-meta-node:8080";
+            containerUrl = "http://" + (containerName != null ? containerName : "localhost") + ":" + serverPort;
+            localUrl = "http://localhost:" + (hostPort != null ? hostPort : serverPort);
+        } else if (testPort != null) {
+            // Running in test with a random port assigned, use `local.server.port`
+            metaNodeUrl = "http://localhost:8080";
+            containerUrl = "http://localhost:" + testPort;
+            localUrl = "http://localhost:" + testPort;
         } else {
-        	this.containerUrl = "http://localhost:" + containerPort;
-        	this.metaNodeUrl  = "http://localhost:8080";
-        	this.localUrl = "http://localhost:" + containerPort; // Using value from application.properties
-        	this.hostPort     = containerPort;
+            // Default mode: Running locally or in other scenarios
+            metaNodeUrl = "http://localhost:8080";
+            containerUrl = "http://localhost:8081";
+            localUrl = "http://localhost:8081";
         }
+
+
+        logger.info("RUNTIME_MODE: {}", runtimeMode);
+        logger.info("MetaNodeUrl: {}", metaNodeUrl);
+        logger.info("ContainerUrl: {}", containerUrl);
+        logger.info("LocalUrl: {}", localUrl);
+    	
         this.rootDir = getAppDir() + "/file-storage";
         this.keyStoreFilePath = Paths.get(getAppDir(),"config","keystore.ks").toString();
         this.keyStorePassword = "password";
@@ -69,8 +90,8 @@ public class Config {
 	    return restTemplate;
 	}
 	
-	public String getContainerPort() {
-    	return containerPort;
+	public String getServerPort() {
+    	return serverPort;
     }
     
     public String getContainerUrl() {
@@ -93,7 +114,6 @@ public class Config {
 
             File jarFile;
 
-            // If the path is a URI (starts with "jar:file:" or "file:")
             if (jarPath.startsWith("jar:file:")) {
                 jarPath = jarPath.substring(9, jarPath.indexOf('!')); // Extract the JAR path
                 jarFile = new File(new URI(jarPath)); // Handle as URI
@@ -101,11 +121,9 @@ public class Config {
                 jarPath = jarPath.substring(5); // Strip "file:" prefix and handle as file path
                 jarFile = new File(jarPath);
             } else {
-                // Handle as a regular file path (no URI involved)
                 jarFile = new File(jarPath);
             }
 
-            // Call helper method to handle the app directory logic
             return handleAppDir(jarFile);
 
         } catch (URISyntaxException | IllegalArgumentException e) {
@@ -123,7 +141,7 @@ public class Config {
 
         if (jarDir == null || !jarDir.exists()) {
             logger.warn("Jar directory is null or does not exist: {}", jarDir);
-            jarDir = new File("/app"); // Fallback to /app in a container environment
+            jarDir = new File("/app"); 
         }
 
         File dfsDir = new File(jarDir, "dfs");
@@ -142,16 +160,25 @@ public class Config {
         return dfsDir.getAbsolutePath();
     }
 
-	private boolean isRunningInDocker() {
-	    String cgroup = "";
-	    try {
-	        cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
-	    } catch (IOException e) {
-	        logger.info("Could not read cgroup file. ");
-	    }
-	    return cgroup.contains("docker") || cgroup.contains("kubepods");
+	public boolean isRunningInDocker() {
+        return runningInDocker;
 	}
+		/*
+        if (runningInDocker != null) {
+            return runningInDocker; // Return cached result if available
+        }
 
+        String cgroup = "";
+        try {
+            cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
+        } catch (IOException e) {
+            logger.info("Could not read cgroup file.");
+        }
+        
+        runningInDocker = cgroup.contains("docker") || cgroup.contains("kubepods"); // Cache the result
+        return runningInDocker;
+	}
+*/
 	public String getKeyStoreFilePath() {
 		return this.keyStoreFilePath;
 	}
@@ -172,25 +199,7 @@ public class Config {
 		return containerName;
 	}
 
-	//public void setContainerName(String containerName) {
-	//	this.containerName = containerName;
-	//}
-
-	public String getHostPort() {
-		return hostPort;
-	}
-
-	//public void setHostPort(String hostPort) {
-	//	this.hostPort = hostPort;
-	//}
-
 	public String getLocalUrl() {
 		return localUrl;
 	}
-
-	//public void setLocalUrl(String localUrl) {
-	//	this.localUrl = localUrl;
-	//}
-
-
 }
