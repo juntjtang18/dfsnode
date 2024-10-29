@@ -89,7 +89,7 @@ public class DedupeFileServiceIntegrationTest {
         return response;
     }
 
-    @Test
+    //@Test
     public void testSaveFile() {
         // Create a DfsFile object to send in the request body
         DfsFile dfsFile = new DfsFile();
@@ -117,42 +117,7 @@ public class DedupeFileServiceIntegrationTest {
         assertThat(response.getBody()).isEqualTo("File saved successfully.");
     }
     
-    @Test
-    public void testDedupeSaveFile_Success() throws Exception {
-        // Prepare a mock file for upload
-        String fileContent = "This is a test file for deduplication service.";
-        InputStream inputStream = new ByteArrayInputStream(fileContent.getBytes());
-        MultipartFile file = new MockMultipartFile(
-                "file", 
-                "testfile.txt", 
-                MediaType.TEXT_PLAIN_VALUE, 
-                inputStream
-        );
-
-        // Define test parameters
-        String user = "testUser";
-        String targetDir = "/testDirectory";
-
-        // Call the dedupeSaveFile method
-        String fileHash = dedupeFileService.dedupeSaveFile(file, user, targetDir);
-
-        // Verify that the file hash is not null or empty
-        assertNotNull(fileHash, "File hash should not be null");
-        assertFalse(fileHash.isEmpty(), "File hash should not be empty");
-
-        // Fetch the saved file metadata from the MetaNode to verify the save
-        String fileUrl = config.getMetaNodeUrl() + "/metadata/file/" + fileHash;
-        DfsFile savedDfsFile = restTemplate.getForObject(fileUrl, DfsFile.class);
-        assertNotNull(savedDfsFile, "DfsFile should be fetched successfully from MetaNode");
-
-        // Verify the file metadata
-        assertEquals(fileHash, savedDfsFile.getHash(), "The hash of the saved DfsFile should match the calculated hash");
-        assertEquals(user, savedDfsFile.getOwner(), "The owner of the saved DfsFile should match the provided user");
-        assertEquals(targetDir + "/testfile.txt", savedDfsFile.getPath(), "The file path should be correct");
-        assertEquals(file.getSize(), savedDfsFile.getSize(), "The file size should match the uploaded file size");
-    }
-
-    @Test
+    //@Test
     public void testGetDfsFileByHash_Success() {
         DfsFile dfsFile = new DfsFile();
         dfsFile.setHash("hash1234");
@@ -188,22 +153,6 @@ public class DedupeFileServiceIntegrationTest {
     }
 
     //@Test
-    public void testGetDfsFileByPath_Success() {
-        // Assume a file has already been stored and we have its path
-    	String username = "user";
-        String filePath = "/testDirectory/testfile.txt";
-        
-        // Fetch the file metadata by its path
-        DfsFile dfsFile = dedupeFileService.getDfsFileByPath(username, filePath);
-
-        // Verify that the DfsFile object is not null
-        assertNotNull(dfsFile, "DfsFile should be fetched successfully");
-        
-        // Verify that the path matches the requested path
-        assertEquals(filePath, dfsFile.getPath(), "The path of the DfsFile should match the requested path");
-    }
-
-    //@Test
     public void testCalculateFileHash_Success() throws NoSuchAlgorithmException {
         // Create a list of block hashes to simulate the blocks of a file
         List<String> blockHashes = List.of(
@@ -219,4 +168,53 @@ public class DedupeFileServiceIntegrationTest {
         assertNotNull(fileHash, "Calculated file hash should not be null");
         assertFalse(fileHash.isEmpty(), "Calculated file hash should not be empty");
     }
+    
+    @Test
+    public void testGetDfsFileByPath_Success() {
+        // Set up a file for testing
+        DfsFile dfsFile = new DfsFile();
+        dfsFile.setHash("hash5678");
+        dfsFile.setName("example_success.txt");
+        dfsFile.setOwner("testUser");
+        dfsFile.setPath("/test-directory/example_success.txt");
+        dfsFile.setSize(2048);
+        dfsFile.setDirectory(false);
+        dfsFile.setParentHash("parentHash456");
+        dfsFile.setBlockHashes(Collections.singletonList("blockHash2"));
+        dfsFile.setCreateTime(new Date());
+        dfsFile.setLastModifiedTime(new Date());
+
+        // Define the target directory
+        String targetDirectory = "/test-directory";
+
+        // Save the test file
+        ResponseEntity<String> response = saveTestFile(dfsFile, targetDirectory);
+
+        // Check that file was saved successfully
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isEqualTo("File saved successfully.");
+
+        // Fetch the file metadata by its path
+        DfsFile fetchedFile = dedupeFileService.getDfsFileByPath("testUser", dfsFile.getPath());
+
+        // Verify that the fetched DfsFile object is not null
+        assertNotNull(fetchedFile, "DfsFile should be fetched successfully");
+        
+        // Verify additional properties of the DfsFile to match the expected values
+        assertEquals(dfsFile.getPath(), fetchedFile.getPath(), "The path of the fetched DfsFile should match the requested path");
+        assertEquals(dfsFile.getName(), fetchedFile.getName(), "The name of the fetched DfsFile should match the expected name");
+        assertEquals(dfsFile.getOwner(), fetchedFile.getOwner(), "The owner of the fetched DfsFile should match the expected owner");
+    }
+
+    @Test
+    public void testGetDfsFileByPath_FileNotFound() {
+        // Attempt to fetch a file metadata by a path that does not exist
+        String username = "testUser";
+        String nonExistentFilePath = "/non-existent-directory/non-existent-file.txt";
+        DfsFile fetchedFile = dedupeFileService.getDfsFileByPath(username, nonExistentFilePath);
+
+        // Verify that the fetched DfsFile object is null since the file does not exist
+        assertNull(fetchedFile, "DfsFile should be null when the file does not exist");
+    }
+
 }

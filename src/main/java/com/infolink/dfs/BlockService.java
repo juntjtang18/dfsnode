@@ -81,9 +81,11 @@ public class BlockService {
     }
 
     public byte[] readBlock(String hash) throws IOException, NoSuchElementException, NoSuchAlgorithmException {
-        logger.debug("Attempting to read block with hash: {}", hash);
+        
         byte[] blockData = blockStorage.readBlock(hash); // Use BlockStorage to read the block
+        
         logger.debug("Successfully read block with hash: {}", hash);
+        
         return blockData; // Return the block data
     }
     
@@ -155,7 +157,9 @@ public class BlockService {
         }
     }
 
-    public void registerBlockLocation(String hash) {
+    public boolean registerBlockLocation(String hash) {
+    	if (hash==null) return false;
+    	
     	logger.debug("register block onto {}", config.getContainerUrl());
     	
         // Prepare the request object
@@ -170,9 +174,12 @@ public class BlockService {
         try {
             HttpEntity<RequestBlockNode> requestEntity = new HttpEntity<>(request);
             restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
+            
+            return true;
         } catch (Exception e) {
             e.printStackTrace(); // Handle exception as needed
         }
+        return false;
     }
 
     public void unregisterBlock(String hash) {
@@ -183,6 +190,10 @@ public class BlockService {
         } catch (Exception e) {
             e.printStackTrace(); // Handle exception as needed
         }
+    }
+    
+    public void clearBlockFiles() {
+    	blockStorage.clearFiles();
     }
 
     // Inner class for request

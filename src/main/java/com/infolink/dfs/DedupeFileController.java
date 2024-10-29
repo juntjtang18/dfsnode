@@ -1,26 +1,32 @@
 package com.infolink.dfs;
 
-import com.infolink.dfs.shared.DfsFile;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
-
 import java.io.IOException;
-import java.io.InputStream;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.infolink.dfs.shared.DfsFile;
+
+
 @RestController
 public class DedupeFileController {
+    private static final Logger logger = LoggerFactory.getLogger(DedupeFileController.class);
 
     @Autowired
     private DedupeFileService dedupeFileService;
@@ -39,96 +45,64 @@ public class DedupeFileController {
     }
 
     @PostMapping("/dfs/file/download")
-    public ResponseEntity<StreamingResponseBody> downloadFile(@RequestBody Map<String, String> request) {
+    public ResponseEntity<Resource> downloadFile(@RequestBody Map<String, String> request) {
         String filepath = request.get("filepath");
         String username = request.get("username");
+
+        logger.info("Received download request for filepath: {} by user: {}", filepath, username);
 
         try {
             // Fetch the DfsFile metadata from the metanode.
             DfsFile dfsFile = dedupeFileService.getDfsFileByPath(username, filepath);
             if (dfsFile == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+                logger.warn("No content found for filepath: {} by user: {}", filepath, username);
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
             }
+
+            logger.info("File metadata retrieved successfully for filepath: {} by user: {}", filepath, username);
 
             // Set the response headers for file download
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentDispositionFormData(dfsFile.getName(), dfsFile.getName()); // Set disposition with file name
+            headers.setContentDispositionFormData(dfsFile.getName(), dfsFile.getName());
             headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
 
+            logger.info("Initiating file download for file hash: {}", dfsFile.getHash());
+
             // Write the file content to the response output stream
-            StreamingResponseBody responseBody = dedupeFileService.downloadFileContent(dfsFile);
-            
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(responseBody);
+            ResponseEntity<Resource> response = dedupeFileService.downloadFile(dfsFile.getHash());
+
+            logger.info("File download response created successfully for file hash: {}", dfsFile.getHash());
+
+            return response;
         } catch (Exception e) {
+            logger.error("Error occurred during file download for filepath: {} by user: {}", filepath, username, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-    
+
 
     @GetMapping("/dfs/file/downloadByHash")
-    public ResponseEntity<byte[]> downloadFileByHash(@RequestParam("hash") String hash) {
+    public ResponseEntity<Resource> downloadFileByHash(@RequestParam("hash") String hash) {
+        logger.debug("downloadFileByHash() called with hash: {}", hash);
+
+        if (hash == null || hash.isEmpty()) {
+            logger.warn("Hash parameter is null or empty");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+        }
+
         try {
-            // Fetch the DfsFile metadata from the metanode using its hash.
-            DfsFile dfsFile = null;
-            if (dfsFile == null) {
-                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+            // Use dedupeFileService to fetch the file content based on the provided hash
+            ResponseEntity<Resource> response = dedupeFileService.downloadFile(hash);
+            if (response == null || !response.getStatusCode().is2xxSuccessful()) {
+                logger.info("No content found for hash: {}", hash);
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
             }
-            byte[] fileContent = fetchFileContent(dfsFile);
-            return buildFileResponse(fileContent, dfsFile.getName());
+
+            return response;
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(null);
+            logger.error("An error occurred during file download by hash: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
     
-    private byte[] fetchFileContent(DfsFile dfsFile) throws IOException {
-        List<byte[]> blocks = new ArrayList<>();
-
-        // Iterate through block hashes and fetch each block's data from available nodes.
-        for (String blockHash : dfsFile.getBlockHashes()) {
-            List<String> nodeUrls = null;
-
-            // Loop through available nodes and attempt to retrieve the block.
-            byte[] blockData = null;
-            for (String nodeUrl : nodeUrls) {
-                blockData = null;
-                if (blockData != null) {
-                    break; // Stop if block is successfully retrieved.
-                }
-            }
-
-            if (blockData == null) {
-                throw new IOException("Unable to retrieve block with hash: " + blockHash);
-            }
-
-            blocks.add(blockData);
-        }
-
-        // Concatenate all blocks into a single byte array to reconstruct the file.
-        return concatenateBlocks(blocks);
-    }
-
-    private byte[] concatenateBlocks(List<byte[]> blocks) {
-        int totalSize = blocks.stream().mapToInt(block -> block.length).sum();
-        byte[] fileContent = new byte[totalSize];
-        int currentPosition = 0;
-
-        for (byte[] block : blocks) {
-            System.arraycopy(block, 0, fileContent, currentPosition, block.length);
-            currentPosition += block.length;
-        }
-
-        return fileContent;
-    }
-
-    private ResponseEntity<byte[]> buildFileResponse(byte[] fileContent, String fileName) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
-
-        return ResponseEntity.ok()
-                .headers(headers)
-                .body(fileContent);
-    }
 }

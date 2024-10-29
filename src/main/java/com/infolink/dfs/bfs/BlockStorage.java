@@ -128,6 +128,8 @@ public class BlockStorage {
                     	block.decrypt(encryptor);
                     }
                     
+                    logger.debug("BlockStorage::readBlock----------------- block read(byte count={})", block.getSize());
+                    logger.debug(" --------------------------------------- block actual size={}", block.getData().length);
                     return block.getData(); // Return the read block data
                 }
             }
@@ -216,7 +218,23 @@ public class BlockStorage {
     public String getBlockFilePath(String hash) {
         return Paths.get(rootDir, hash.substring(0, 2), hash.substring(2, 4), hash.substring(4, 6), hash.substring(6,8) + ".bfs").toString();
     }
-
+    
+    public void clearFiles() {
+        try {
+            Path rootPath = Paths.get(rootDir);
+            if (Files.exists(rootPath)) {
+                Files.walk(rootPath)
+                    .sorted((path1, path2) -> path2.compareTo(path1)) // Start from deepest file first
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+                logger.debug("All test files cleared successfully.");
+            } else {
+                logger.debug("Root directory does not exist: nothing to clear.");
+            }
+        } catch (IOException e) {
+            logger.error("Failed to clear test files: {}", e.getMessage());
+        }
+    }
 }
 
 

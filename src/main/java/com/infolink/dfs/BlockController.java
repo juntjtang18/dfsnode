@@ -55,6 +55,11 @@ public class BlockController {
         }
     }
     
+    @DeleteMapping("/dfs/block/clear-files")
+    public ResponseEntity<String> clearBlockFiles() {
+    	blockService.clearBlockFiles();
+    	return ResponseEntity.ok("All block files are cleared.");
+    }
     
     // Inner class for request payload
     public static class RequestStoreBlock {

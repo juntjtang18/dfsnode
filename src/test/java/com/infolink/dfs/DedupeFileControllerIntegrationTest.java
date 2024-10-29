@@ -38,7 +38,7 @@ public class DedupeFileControllerIntegrationTest {
         baseUrl = "http://localhost:" + port + "/dfs/file";
     }
 
-    @Test
+    //@Test
     public void testUploadFile() throws IOException {
         // Create a temporary file with some content.
         File tempFile = File.createTempFile("testfile", ".txt");

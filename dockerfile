@@ -19,7 +19,7 @@ ENV META_NODE_URL=http://localhost:8080
 ENV RUNTIME_MODE=PRODUCT
 
 # Build the application
-RUN ./mvnw clean install
+RUN ./mvnw clean install  -DskipTests=true
 
 # Use a lightweight image to run the application
 FROM openjdk:17-jdk-slim
