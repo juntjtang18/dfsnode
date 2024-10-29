@@ -46,7 +46,7 @@ public class DFSNodeApp {
 	    }
 	}
 	
-    @Scheduled(fixedRateString = "${dfs.node.heartbeat.rate:60000}") // Default to 10 seconds
+    @Scheduled(fixedRateString = "${dfs.node.heartbeat.rate:30000}") // Default to 60 seconds
     public void heartbeatToMetaNode() {
         String containerUrl = config.getContainerUrl();
         String localUrl = config.getLocalUrl();
