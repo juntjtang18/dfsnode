@@ -11,18 +11,45 @@ import java.util.NoSuchElementException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Service;
 
+import com.infolink.dfs.Config;
 import com.infolink.dfs.tobedelete.FileController;
 
+import jakarta.annotation.PostConstruct;
+
+@Service
 public class BlockStorage {
     private static final Logger logger = LoggerFactory.getLogger(FileController.class);
     private Encryptor encryptor;
     private String rootDir;
     
+    @Autowired
+    private RedisTemplate<String, Object> redisTemplate;
+    
+    @Autowired
+    private Config config;
+    
+    private static final String BLOCK_STORAGE_PREFIX = "block_storage:"; // Redis key prefix
+    private int blockCount;
+    private long totalSize;
+    private String containerUrl;
+    
     public BlockStorage(Encryptor encryptor, String rootDir) {
-        this.rootDir = rootDir;
-        this.encryptor = encryptor;
+        this.rootDir 	= rootDir;
+        this.encryptor 	= encryptor;
         initializeDirectoryStructure();
+    }
+    
+    @PostConstruct
+    public void postConstruct() {
+        this.containerUrl = config.getContainerUrl();
+        
+        blockCount = 0;
+        totalSize = 0;
+        loadStats();
     }
 
     private void initializeDirectoryStructure() {
@@ -90,6 +117,15 @@ public class BlockStorage {
                 
                 // Write the block data to the block file
                 block.writeTo(blockRaf);
+                
+                // Update the block count and total size
+                blockCount++;
+                totalSize += blockData.length; // Add the size of the newly saved block
+
+                // Update Redis directly
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", blockCount);
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", totalSize);
+                logger.debug("Block statistics updated in Redis: count={}, size={}", blockCount, totalSize);
             }
         }
     }
@@ -173,6 +209,14 @@ public class BlockStorage {
 
                     if (schema.getReferenceCount() == 0) {
                         logger.debug("Block with hash {} can be purged.", hash);
+                        
+                        totalSize -= schema.getSize(); // Subtract the size of the deleted block
+                        blockCount--; // Decrement the block count
+
+                        // Update Redis directly
+                        redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", blockCount);
+                        redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", totalSize);
+                        logger.debug("Block statistics updated in Redis after deletion: count={}, size={}", blockCount, totalSize);
                     }
                     break; // Exit the loop as we found the hash
                 }
@@ -228,12 +272,32 @@ public class BlockStorage {
                     .map(Path::toFile)
                     .forEach(File::delete);
                 logger.debug("All test files cleared successfully.");
+                // Reset block count and total size
+                blockCount = 0;
+                totalSize = 0;
+
+                // Update statistics in Redis
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + config.getContainerUrl() + ":blockCount", blockCount);
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + config.getContainerUrl() + ":totalSize", totalSize);
+                logger.debug("Block count and total size reset to 0 in Redis.");
+                
             } else {
                 logger.debug("Root directory does not exist: nothing to clear.");
             }
         } catch (IOException e) {
             logger.error("Failed to clear test files: {}", e.getMessage());
         }
+    }
+    
+    // Load stats from Redis
+    private void loadStats() {
+        Integer count = (Integer) redisTemplate.opsForValue().get(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount");
+        Long 	size  = (Long) redisTemplate.opsForValue().get(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize");
+
+        blockCount = (count != null) ? count : 0;
+        totalSize = (size != null) ? size : 0;
+
+        logger.debug("Block statistics loaded from Redis: count={}, size={}", blockCount, totalSize);
     }
 }
 

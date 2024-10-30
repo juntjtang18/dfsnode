@@ -4,6 +4,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
 
 import com.infolink.dfs.bfs.BlockStorage;
 import com.infolink.dfs.bfs.Encryptor;
@@ -17,9 +19,12 @@ import java.util.NoSuchElementException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@SpringBootTest
 class BlockStorageTest {
-
+	
+    @Autowired
     private BlockStorage blockStorage;
+    
     private Encryptor mockEncryptor;
     private String rootDir;
 
@@ -28,7 +33,7 @@ class BlockStorageTest {
         // Set up a temporary directory for testing
         rootDir = Files.createTempDirectory("blockStorageTest").toString();
         mockEncryptor = Mockito.mock(Encryptor.class);
-        blockStorage = new BlockStorage(mockEncryptor, rootDir);
+        //blockStorage = new BlockStorage(mockEncryptor, rootDir);
     }
 
     @Test
