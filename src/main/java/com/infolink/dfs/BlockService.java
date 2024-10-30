@@ -192,6 +192,13 @@ public class BlockService {
         }
     }
     
+    public long getBlockCount() {
+    	return blockStorage.getBlockCount();
+    }
+    
+    public long getBlockTotalSize() {
+    	return blockStorage.getBlockTotalSize();
+    }
     public void clearBlockFiles() {
     	blockStorage.clearFiles();
     }

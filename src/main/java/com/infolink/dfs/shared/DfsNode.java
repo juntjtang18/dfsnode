@@ -6,7 +6,8 @@ public class DfsNode {
     private String containerUrl;
     private String localUrl;
     private Date lastTimeReport; // Last time the health status was reported
-    //private HealthStatus healthStatus; // Health status
+    private long blockCount;
+    private long blockTotalSize;
 
     public DfsNode() {
         this.containerUrl = "";
@@ -57,6 +58,8 @@ public class DfsNode {
         return "DfsNode{" +
                 "containerUrl='" + containerUrl + '\'' +
                 ", localUrl='" + localUrl + '\'' +
+                ", blockCount=" + blockCount + 
+                ", blockTotalSize=" + blockTotalSize +
                 ", lastTimeReport=" + lastTimeReport +
                 '}';
     }
@@ -68,6 +71,22 @@ public class DfsNode {
     public void setLastTimeReport(Date lastTimeReport) {
         this.lastTimeReport = lastTimeReport;
     }
+
+	public long getBlockCount() {
+		return blockCount;
+	}
+
+	public void setBlockCount(long blockCount) {
+		this.blockCount = blockCount;
+	}
+
+	public long getBlockTotalSize() {
+		return blockTotalSize;
+	}
+
+	public void setBlockTotalSize(long blockTotalSize) {
+		this.blockTotalSize = blockTotalSize;
+	}
 
 
 }

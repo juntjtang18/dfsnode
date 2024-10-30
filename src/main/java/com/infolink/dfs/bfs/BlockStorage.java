@@ -22,18 +22,18 @@ import jakarta.annotation.PostConstruct;
 
 @Service
 public class BlockStorage {
-    private static final Logger logger = LoggerFactory.getLogger(FileController.class);
+    private static final Logger logger = LoggerFactory.getLogger(BlockStorage.class);
     private Encryptor encryptor;
     private String rootDir;
     
     @Autowired
-    private RedisTemplate<String, Object> redisTemplate;
+    private RedisTemplate<String, Long> redisTemplate;
     
     @Autowired
     private Config config;
     
-    private static final String BLOCK_STORAGE_PREFIX = "block_storage:"; // Redis key prefix
-    private int blockCount;
+    public static final String BLOCK_STORAGE_PREFIX = "block_storage:"; // Redis key prefix
+    private long blockCount;
     private long totalSize;
     private String containerUrl;
     
@@ -123,8 +123,8 @@ public class BlockStorage {
                 totalSize += blockData.length; // Add the size of the newly saved block
 
                 // Update Redis directly
-                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", blockCount);
-                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", totalSize);
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", Long.valueOf(blockCount));
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", Long.valueOf(totalSize));
                 logger.debug("Block statistics updated in Redis: count={}, size={}", blockCount, totalSize);
             }
         }
@@ -199,24 +199,28 @@ public class BlockStorage {
 
                 if (schema.getHash().equals(hash)) {
                     found = true;
+                    if (schema.getReferenceCount()==1) {
+                    	totalSize -= schema.getSize(); // Subtract the size of the deleted block
+                        blockCount--; // Decrement the block count
 
+                        // Update Redis directly
+                        redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", Long.valueOf(blockCount));
+                        redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", Long.valueOf(totalSize));
+                        logger.debug("Block statistics updated in Redis after deletion: count={}, size={}", blockCount, totalSize);
+
+                    }
+                    
                     if (schema.getReferenceCount() > 0) {
                         schema.setReferenceCount(schema.getReferenceCount()-1);
                         indexRaf.seek(currentPosition);
                         
                         schema.writeTo(indexRaf);
+                        
                     }
-
+                    
                     if (schema.getReferenceCount() == 0) {
                         logger.debug("Block with hash {} can be purged.", hash);
                         
-                        totalSize -= schema.getSize(); // Subtract the size of the deleted block
-                        blockCount--; // Decrement the block count
-
-                        // Update Redis directly
-                        redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", blockCount);
-                        redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", totalSize);
-                        logger.debug("Block statistics updated in Redis after deletion: count={}, size={}", blockCount, totalSize);
                     }
                     break; // Exit the loop as we found the hash
                 }
@@ -277,8 +281,8 @@ public class BlockStorage {
                 totalSize = 0;
 
                 // Update statistics in Redis
-                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + config.getContainerUrl() + ":blockCount", blockCount);
-                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + config.getContainerUrl() + ":totalSize", totalSize);
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount", Long.valueOf(blockCount));
+                redisTemplate.opsForValue().set(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize", Long.valueOf(totalSize));
                 logger.debug("Block count and total size reset to 0 in Redis.");
                 
             } else {
@@ -291,13 +295,21 @@ public class BlockStorage {
     
     // Load stats from Redis
     private void loadStats() {
-        Integer count = (Integer) redisTemplate.opsForValue().get(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount");
-        Long 	size  = (Long) redisTemplate.opsForValue().get(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize");
+        Long count = redisTemplate.opsForValue().get(BLOCK_STORAGE_PREFIX + containerUrl + ":blockCount");
+        Long size  = redisTemplate.opsForValue().get(BLOCK_STORAGE_PREFIX + containerUrl + ":totalSize");
 
         blockCount = (count != null) ? count : 0;
         totalSize = (size != null) ? size : 0;
 
         logger.debug("Block statistics loaded from Redis: count={}, size={}", blockCount, totalSize);
+    }
+    
+    public long getBlockCount() {
+    	return this.blockCount;
+    }
+    
+    public long getBlockTotalSize() {
+    	return this.totalSize;
     }
 }
 

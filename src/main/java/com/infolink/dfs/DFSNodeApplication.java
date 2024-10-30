@@ -21,15 +21,17 @@ import jakarta.annotation.PostConstruct;
 
 @SpringBootApplication
 @EnableScheduling
-public class DFSNodeApp {
-    private static final Logger logger = LoggerFactory.getLogger(DFSNodeApp.class);
+public class DFSNodeApplication {
+    private static final Logger logger = LoggerFactory.getLogger(DFSNodeApplication.class);
     private RestTemplate restTemplate = new RestTemplate();
     private Path rootDir;
     @Autowired
     private Config config;
+    @Autowired
+    private BlockService blockService;
     
  	public static void main(String[] args) {
-		SpringApplication.run(DFSNodeApp.class, args);
+		SpringApplication.run(DFSNodeApplication.class, args);
 	}
  	
 	@PostConstruct
@@ -53,8 +55,12 @@ public class DFSNodeApp {
         String metaUrl = config.getMetaNodeUrl();
 
         DfsNode dfsNode = new DfsNode(containerUrl, localUrl);
+        dfsNode.setBlockCount(blockService.getBlockCount());
+        dfsNode.setBlockTotalSize(blockService.getBlockTotalSize());
+        
 	    logger.info("Registering node {} to MetaNode at: {}", containerUrl, metaUrl);
         logger.info("Sending heartbeat to MetaNode at: {}", metaUrl);
+        logger.debug("block count={}, total size={}", dfsNode.getBlockCount(), dfsNode.getBlockTotalSize());
         
         try {
             // Send POST request to register the node
