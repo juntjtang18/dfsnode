@@ -28,6 +28,8 @@ public class DfsFile {
         this.isDirectory = isDirectory;
         this.parentHash = parentHash;
         this.blockHashes = blockHashes;
+    	this.createTime = new Date();
+    	this.lastModifiedTime = new Date();
     }
     
     // For files, contains content hash and block hashes
