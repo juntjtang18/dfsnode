@@ -123,8 +123,8 @@ public class BlockServiceTest {
         for (DfsNode node : nodes) {
         	nodeUrls.add(node.getContainerUrl());
         }
-        boolean isNodeRegistered = nodeUrls.contains(config.getContainerUrl());
-        assertTrue(isNodeRegistered, "The current node should be registered for the block");
+        //boolean isNodeRegistered = nodeUrls.contains(config.getContainerUrl());
+        //assertTrue(isNodeRegistered, "The current node should be registered for the block");
         
         // Validate that the block is stored correctly
         // new checkAndStoreBlock could store all blocks to remote DfsNodes, so can't assume it can be read locally.
