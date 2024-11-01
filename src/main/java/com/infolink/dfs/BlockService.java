@@ -15,6 +15,7 @@ import com.infolink.dfs.shared.HashUtil;
 
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.io.IOException;
@@ -43,7 +44,7 @@ public class BlockService {
         return hash;
     }
     
-    public String checkAndStoreBlock(byte[] block) throws NoSuchAlgorithmException, IOException {
+    public String checkAndStoreBlock(byte[] block) throws NoSuchAlgorithmException, IOException, Exception {
         String hash = HashUtil.calculateHash(block);
         logger.debug("Calculated hash for the block: {}", hash);
 
@@ -52,18 +53,15 @@ public class BlockService {
         List<DfsNode> nodes = response.getNodes();
         
         if (nodes == null || nodes.isEmpty()) {
-            logger.error("No nodes found for the block with hash: {}", hash);
-
-            // TODO: get the block node mapping for the hash and show it through logger.info
-            List<String> blockNodesMapping = getBlockNodesMapping(hash);
-            logger.info("Block-node mapping for hash {}: {}", hash, blockNodesMapping);
-
-            logger.debug("No nodes assigned by meta node for the block with hash: " + hash);
+            logger.error("No nodes found to store the block: {}", hash);
+            //List<String> blockNodesMapping = getBlockNodesMapping(hash);
+            //logger.info("Block-node mapping for hash {}: {}", hash, blockNodesMapping);
+            //logger.debug("No nodes assigned by meta node for the block with hash: " + hash);
+            return null;
         }
 
         logger.debug("Found {} nodes responsible for the block with hash: {}", nodes.size(), hash);
 
-        // Step 2: Process each node
         for (DfsNode node : nodes) {
             if (isCurrentNode(node)) {
                 logger.debug("Current node is responsible for the block. Saving block locally with hash: {}", hash);
@@ -81,28 +79,29 @@ public class BlockService {
     }
 
     public byte[] readBlock(String hash) throws IOException, NoSuchElementException, NoSuchAlgorithmException {
-        
         byte[] blockData = blockStorage.readBlock(hash); // Use BlockStorage to read the block
-        
         logger.debug("Successfully read block with hash: {}", hash);
-        
-        return blockData; // Return the block data
+        return blockData;
     }
     
     private List<String> getBlockNodesMapping(String hash) {
         try {
-            ResponseEntity<List<String>> response = restTemplate.exchange(
+            ResponseEntity<List<DfsNode>> response = restTemplate.exchange(
                 config.getMetaNodeUrl() + "/metadata/block/block-nodes/{hash}",
                 HttpMethod.GET,
                 null,
-                new ParameterizedTypeReference<List<String>>() {},
+                new ParameterizedTypeReference<List<DfsNode>>() {},
                 hash
             );
 
-            List<String> blockNodesMapping = response.getBody();
+            List<DfsNode> nodes = response.getBody();
 
-            if (blockNodesMapping != null) {
-                return blockNodesMapping;
+            if (nodes != null) {
+            	List<String> nodeUrls = new ArrayList<>();
+            	for (DfsNode node : nodes) {
+            		nodeUrls.add(node.getContainerUrl());
+            	}
+                return nodeUrls;
             } else {
                 logger.warn("Received null response for block-node mapping for hash: {}", hash);
                 return List.of();
@@ -141,7 +140,9 @@ public class BlockService {
         return config.getContainerUrl().equals(node.getContainerUrl());
     }
 
-    private void storeBlockOnRemoteNode(DfsNode node, String hash, byte[] block) {
+    public void storeBlockOnRemoteNode(DfsNode node, String hash, byte[] block) throws Exception {
+    	if (node==null || hash==null || block==null) throw new Exception("The passed in parameter is null.");
+    	
     	String nodeUrl = config.isRunningInDocker() ? node.getContainerUrl():node.getLocalUrl();
     	
     	logger.debug("storeBlockOnRemoteNode: {}", nodeUrl);
@@ -149,12 +150,9 @@ public class BlockService {
         String url = String.format("%s/dfs/block/store", nodeUrl);
         RequestStoreBlock request = new RequestStoreBlock(hash, block);
 
-        try {
-            HttpEntity<RequestStoreBlock> requestEntity = new HttpEntity<>(request);
-            restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
-        } catch (Exception e) {
-            e.printStackTrace(); // Handle exception as needed
-        }
+        HttpEntity<RequestStoreBlock> requestEntity = new HttpEntity<>(request);
+        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
+        if (!response.getStatusCode().is2xxSuccessful()) throw new Exception("Fail to store block onto " + nodeUrl + ". Response is " + response.getBody());
     }
 
     public boolean registerBlockLocation(String hash) {

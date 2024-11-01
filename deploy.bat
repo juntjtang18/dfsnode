@@ -24,15 +24,11 @@ echo Building Docker image...
 set DOCKER_BUILDKIT=0
 docker build --network %NETWORK_NAME% -t dfs-node .
 
-rem Deploy containers with port mappings
+rem Deploy containers with port mappings and volumes
 echo Deploying containers...
-docker run -d --network %NETWORK_NAME% --name dfs-node-1 -e CONTAINER_NAME=dfs-node-1 -e HOST_PORT=8081 -e META_NODE_URL=http://dfs-meta-node:8080 -e RUNTIME_MODE=PRODUCT -p 8081:8081 dfs-node
-docker run -d --network %NETWORK_NAME% --name dfs-node-2 -e CONTAINER_NAME=dfs-node-2 -e HOST_PORT=8082 -e META_NODE_URL=http://dfs-meta-node:8080 -e RUNTIME_MODE=PRODUCT -p 8082:8081 dfs-node
-docker run -d --network %NETWORK_NAME% --name dfs-node-3 -e CONTAINER_NAME=dfs-node-3 -e HOST_PORT=8083 -e META_NODE_URL=http://dfs-meta-node:8080 -e RUNTIME_MODE=PRODUCT -p 8083:8081 dfs-node
-docker run -d --network %NETWORK_NAME% --name dfs-node-4 -e CONTAINER_NAME=dfs-node-4 -e HOST_PORT=8084 -e META_NODE_URL=http://dfs-meta-node:8080 -e RUNTIME_MODE=PRODUCT -p 8084:8081 dfs-node
-docker run -d --network %NETWORK_NAME% --name dfs-node-5 -e CONTAINER_NAME=dfs-node-5 -e HOST_PORT=8085 -e META_NODE_URL=http://dfs-meta-node:8080 -e RUNTIME_MODE=PRODUCT -p 8085:8081 dfs-node
-
-
+for /L %%i in (1, 1, 5) do (
+    docker run -d --network %NETWORK_NAME% --name dfs-node-%%i -e CONTAINER_NAME=dfs-node-%%i -e HOST_PORT=808%%i -e META_NODE_URL=http://dfs-meta-node:8080 -e RUNTIME_MODE=PRODUCT -p 808%%i:8081 -v dfs-node-%%i-data:/data dfs-node
+)
 
 echo Deployment completed!
 endlocal

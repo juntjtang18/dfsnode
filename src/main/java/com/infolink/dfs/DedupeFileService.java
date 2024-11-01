@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,11 +91,16 @@ public class DedupeFileService {
             	byte[] realBuffer = new byte[bytesRead];
             	System.arraycopy(buffer, 0, realBuffer, 0, bytesRead);
                 String blockHash = HashUtil.calculateHash(realBuffer, bytesRead);
-                logger.debug("Block: Hash={} byte[]={} ",blockHash, realBuffer);
+                //logger.debug("Block: Hash={} byte[]={} ",blockHash, realBuffer);
                 
                 // Request the metadata node to get nodes for storing the block
                 ResponseNodesForBlock response = getNodesForBlock(blockHash);
-                logger.debug("getNodesForBlock(...) returns: {}, {}", response.getStatus(), response.getNodes());
+                logger.debug("getNodesForBlock(...) returns: {}", response.getStatus());
+                int i = 0;
+                for(DfsNode node : response.getNodes()) {
+                	logger.debug("{}      {}", i, node.getContainerUrl());
+                	i++;
+                }
                 
                 List<DfsNode> nodes = response.getNodes();
                 if (nodes.isEmpty()) {
@@ -104,6 +110,8 @@ public class DedupeFileService {
                 
                 // Store the block in one of the nodes
                 boolean stored = storeBlockOnNodes(nodes, blockHash, realBuffer, bytesRead);
+                
+                
                 logger.debug("Block saved onto nodes{}", nodes);
                 
                 if (stored) {
@@ -342,9 +350,13 @@ public class DedupeFileService {
 
 
     boolean storeBlockOnNodes(List<DfsNode> nodes, String hash, byte[] block, int bytesRead) {
-        logger.debug("DedupFileService::storeBlockOnNodes({}, {})", nodes, hash);
+    	List<String> containerUrls = nodes.stream()
+    		    .map(DfsNode::getContainerUrl) // Get containerUrl for each DfsNode
+    		    .collect(Collectors.toList()); // Collect results into a List<String>
+    	
+        logger.debug("DedupFileService::storeBlockOnNodes({}, {})", containerUrls, hash);
         logger.debug("block size={}", bytesRead);
-        logger.debug("byte[]={}", new String(block));
+        //logger.debug("byte[]={}", new String(block));
 
         // Validate inputs early and return false if invalid
         if (nodes == null || nodes.isEmpty() || hash == null || bytesRead <= 0) {
@@ -352,61 +364,59 @@ public class DedupeFileService {
             return false;
         }
 
-        // Loop through each node and attempt to store the block
-        for (DfsNode node : nodes) {
-            logger.debug("Attempting to store block on node: {}", node.getContainerUrl());
-            
-            try {
-                // Create a truncated version of the block to store
-                byte[] truncatedBlock = Arrays.copyOf(block, bytesRead);
-                RequestStoreBlock requestStoreBlock = new RequestStoreBlock(hash, truncatedBlock);
-                HttpEntity<RequestStoreBlock> request = new HttpEntity<>(requestStoreBlock);
-                
-                // if the node is current node, save locally.
-                String nodeUrl = node.getContainerUrl();
-                if (nodeUrl.equals(config.getContainerUrl())) {
-                	//save locally
-                	logger.debug("Store block locally.");
-                	blockService.storeBlockLocally(hash, truncatedBlock, false);
-                	
-                	
-                } else {
-                	logger.debug("Store block on another node {}", nodeUrl);
-	                String baseUrl = "";
-	                if (config.isRunningInDocker()) {
-	                	baseUrl = node.getContainerUrl();
-	                	logger.debug("This node is running in a container. Use containerUrl({})", baseUrl);
-	                } else {
-	                	baseUrl = node.getLocalUrl();
-	                	logger.debug("This node is running in local, Use localUrl({})", baseUrl);
-	                }
-	                String url = baseUrl + "/dfs/block/store";
-	                logger.debug("Request {} to store the block data.", url);
-	                
-	                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
-	
-	                // Check the response status
-	                if (response.getStatusCode() == HttpStatus.CREATED) {
-	                    logger.info("Block stored successfully on node: {}. Response: {}", node.getContainerUrl(), response.getBody());
-	                    return true; // Return true as soon as a node successfully stores the block
-	                } else {
-	                    logger.warn("Failed to store block on node: {}. Status: {}, Response: {}",
-	                        node.getContainerUrl(), response.getStatusCode(), response.getBody());
-	                }
-                }
-            } catch (HttpClientErrorException e) {
-                // Log detailed information about HTTP error responses
-                logger.error("HTTP error while storing block on node {}: Status: {}, Error: {}",
-                    node.getContainerUrl(), e.getStatusCode(), e.getResponseBodyAsString());
-            } catch (Exception e) {
-                // Handle general exceptions like network issues
-                logger.error("Error occurred while storing block on node {}: {}", node.getContainerUrl(), e.getMessage());
-            }
-        }
+        boolean success = false; // Variable to track if any node successfully stored the block
 
-        // If no nodes successfully stored the block, return false
-        logger.warn("Failed to store block on any node for hash: {}", hash);
-        return false;
+	     // Loop through each node and attempt to store the block
+	     for (DfsNode node : nodes) {
+	         logger.debug("Attempting to store block on node: {}", node.getContainerUrl());
+	         
+	         try {
+	             // Create a truncated version of the block to store
+	             byte[] truncatedBlock = Arrays.copyOf(block, bytesRead);
+	             RequestStoreBlock requestStoreBlock = new RequestStoreBlock(hash, truncatedBlock);
+	             HttpEntity<RequestStoreBlock> request = new HttpEntity<>(requestStoreBlock);
+	             
+	             // if the node is current node, save locally.
+	             String nodeUrl = node.getContainerUrl();
+	             if (nodeUrl.equals(config.getContainerUrl())) {
+	                 // Save locally
+	                 logger.debug("Store block locally.");
+	                 blockService.storeBlockLocally(hash, truncatedBlock, false);
+	                 success = true; // Mark success since we stored locally
+	                 
+	             } else {
+	                 logger.debug("Store block on another node {}", nodeUrl);
+	                 String baseUrl = config.isRunningInDocker() ? node.getContainerUrl() : node.getLocalUrl();
+	                 String url = baseUrl + "/dfs/block/store";
+	                 logger.debug("Request {} to store the block data.", url);
+	                 
+	                 ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, request, String.class);
+	                 
+	                 // Check the response status
+	                 if (response.getStatusCode() == HttpStatus.CREATED) {
+	                     logger.info("Block stored successfully on node: {}. Response: {}", node.getContainerUrl(), response.getBody());
+	                     success = true; // Mark success for any successful remote storage
+	                 } else {
+	                     logger.warn("Failed to store block on node: {}. Status: {}, Response: {}",
+	                         node.getContainerUrl(), response.getStatusCode(), response.getBody());
+	                 }
+	             }
+	         } catch (HttpClientErrorException e) {
+	             logger.error("HTTP error while storing block on node {}: Status: {}, Error: {}",
+	                 node.getContainerUrl(), e.getStatusCode(), e.getResponseBodyAsString());
+	         } catch (Exception e) {
+	             logger.error("Error occurred while storing block on node {}: {}", node.getContainerUrl(), e.getMessage());
+	         }
+	     }
+	
+	     // After attempting to store on all nodes, log the outcome
+	     if (success) {
+	         logger.info("Block stored successfully on at least one node for hash: {}", hash);
+	     } else {
+	         logger.warn("Failed to store block on any node for hash: {}", hash);
+	     }
+	
+	     return success; // Return true if at least one store operation was successful
     }
    
     String calculateFileHash(List<String> blockHashes) throws NoSuchAlgorithmException {

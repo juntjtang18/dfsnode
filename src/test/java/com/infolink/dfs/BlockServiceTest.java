@@ -14,10 +14,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
 
 import com.infolink.dfs.bfs.BlockStorage;
+import com.infolink.dfs.shared.DfsNode;
 import com.infolink.dfs.shared.HashUtil;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import static org.junit.jupiter.api.Assertions.*;
@@ -43,22 +45,16 @@ public class BlockServiceTest {
     private byte[] testBlock;
     private String testHash;
     private String baseUrl;
-    
+    private String metaNodeUrl = "http://localhost:8080";
     @BeforeEach
     public void setUp() throws NoSuchAlgorithmException, IOException {
-        // Initialize test data
-    	//String url = config.getMetaNodeUrl() + "/metadata/clear-all-block-nodes-mapping";
         baseUrl = "http://localhost:8080";
-        /*
-    	restTemplate.exchange(
-                url,
-                HttpMethod.DELETE, // Assuming POST is the correct method for this endpoint
+        restTemplate.exchange(
+                config.getMetaNodeUrl() + "/metadata/block/clear-all-block-nodes-mapping",
+                HttpMethod.DELETE,
                 null,
                 String.class
-            );
-        //clearRegisteredNodes();
-        testHash = blockService.checkAndStoreBlock(testBlock); // Store block and get the hash
-        */
+            );        
     }
     
     // Utility method to clear registered nodes
@@ -85,11 +81,11 @@ public class BlockServiceTest {
 
         // Verify that the block's location is registered in the metadata node
         String url = String.format("%s/metadata/block/block-nodes/%s", config.getMetaNodeUrl(), hash);
-        ResponseEntity<List<String>> response = restTemplate.exchange(
+        ResponseEntity<List<DfsNode>> response = restTemplate.exchange(
             url,
             HttpMethod.GET,
             null,
-            new ParameterizedTypeReference<List<String>>() {}
+            new ParameterizedTypeReference<List<DfsNode>>() {}
         );
 
         // Check that the response is not null and has a status of 200 OK
@@ -97,34 +93,49 @@ public class BlockServiceTest {
         assertEquals(HttpStatus.OK, response.getStatusCode(), "Expected HTTP status 200");
 
         // Verify that the node URL is present in the response body
-        List<String> nodeUrls = response.getBody();
+        List<DfsNode> nodes = response.getBody();
+        List<String> nodeUrls = new ArrayList<>();
+        for (DfsNode node : nodes) {
+        	nodeUrls.add(node.getContainerUrl());
+        }
         assertTrue(nodeUrls.contains(requestingNodeUrl), "The node URL should be registered in the metadata node");
     }
 
 
     @Test
-    public void testCheckAndStoreBlock_Success() throws NoSuchAlgorithmException, IOException {
+    public void testCheckAndStoreBlock_Success() throws NoSuchAlgorithmException, IOException, Exception {
         // Calculate the hash of the stored block
         testBlock = "testBlockData".getBytes();
         String hash = blockService.checkAndStoreBlock(testBlock);
 
-        // Validate that the block is stored correctly
-        byte[] storedBlock = blockStorage.readBlock(hash);
-        assertNotNull(storedBlock, "Stored block should not be null");
-        assertArrayEquals(testBlock, storedBlock, "Stored block data should match the original data");
-        
         // Verify that the block is registered in the metadata node
-        ResponseEntity<List<String>> response = restTemplate.exchange(
+        ResponseEntity<List<DfsNode>> response = restTemplate.exchange(
                 config.getMetaNodeUrl() + "/metadata/block/block-nodes/{hash}",
                 HttpMethod.GET,
                 null,
-                new ParameterizedTypeReference<List<String>>() {},
+                new ParameterizedTypeReference<List<DfsNode>>() {},
                 hash
         );
-        List<String> nodeUrls = response.getBody();
-        assertNotNull(nodeUrls, "Node URLs should not be null");
+        List<DfsNode> nodes = response.getBody();
+        
+        assertNotNull(nodes, "Node URLs should not be null");
+        List<String> nodeUrls = new ArrayList<>();
+        for (DfsNode node : nodes) {
+        	nodeUrls.add(node.getContainerUrl());
+        }
         boolean isNodeRegistered = nodeUrls.contains(config.getContainerUrl());
         assertTrue(isNodeRegistered, "The current node should be registered for the block");
+        
+        // Validate that the block is stored correctly
+        // new checkAndStoreBlock could store all blocks to remote DfsNodes, so can't assume it can be read locally.
+        String dfsNodeLocalUrls = nodes.get(0).getLocalUrl();
+        String nodeUrl = dfsNodeLocalUrls + "/dfs/block/read/" + hash;
+        
+        String readUrl = "http://localhost:" + port + "/dfs/block/read/" + hash;
+        ResponseEntity<byte[]> response2 = restTemplate.exchange(readUrl, HttpMethod.GET, null, byte[].class);
+        byte[] storedBlock = response2.getBody();
+        assertNotNull(storedBlock, "Stored block should not be null");
+        assertArrayEquals(testBlock, storedBlock, "Stored block data should match the original data");
     }
 
     @Test
@@ -140,15 +151,15 @@ public class BlockServiceTest {
         String url = config.getMetaNodeUrl() + "/metadata/block/block-nodes/" + hash;
         logger.info("url to get block node mapping: {}", url);
         
-        ResponseEntity<List<String>> response = restTemplate.exchange(
+        ResponseEntity<List<DfsNode>> response = restTemplate.exchange(
             url,
             HttpMethod.GET,
             null,
-            new ParameterizedTypeReference<List<String>>() {}
+            new ParameterizedTypeReference<List<DfsNode>>() {}
         );
 
         // Extract the list of registered nodes from the response
-        List<String> nodes = response.getBody();
+        List<DfsNode> nodes = response.getBody();
 
         // Assertions to ensure the response is valid
         assertNotNull(nodes, "Nodes should not be null");
@@ -156,7 +167,11 @@ public class BlockServiceTest {
 
         // Verify that the current node URL is among the registered nodes
         String currentNodeUrl = config.getContainerUrl();
-        boolean isNodeRegistered = nodes.contains(currentNodeUrl);
+        List<String> nodeUrls = new ArrayList<>();
+        for (DfsNode node : nodes) {
+        	nodeUrls.add(node.getContainerUrl());
+        }
+        boolean isNodeRegistered = nodeUrls.contains(currentNodeUrl);
 
         assertTrue(isNodeRegistered, "The current node should be registered for the block");
     }

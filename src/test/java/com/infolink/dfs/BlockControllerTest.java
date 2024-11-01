@@ -40,7 +40,7 @@ public class BlockControllerTest {
         // Generate a sample block data and its hash for testing
         restTemplate.exchange(
                 config.getMetaNodeUrl() + "/metadata/block/clear-all-block-nodes-mapping",
-                HttpMethod.DELETE, // Assuming POST is the correct method for this endpoint
+                HttpMethod.DELETE,
                 null,
                 String.class
             );
@@ -48,7 +48,8 @@ public class BlockControllerTest {
         hash = HashUtil.calculateHash(block);
     }
 
-    @Test
+    @SuppressWarnings("deprecation")
+	@Test
     public void testStoreBlock() {
         // Prepare the request data
         //String hash = "testHash123";
@@ -74,7 +75,8 @@ public class BlockControllerTest {
         assertEquals("Block stored successfully with hash: " + hash, response.getBody());
     }
     
-    @Test
+    @SuppressWarnings({ "deprecation" })
+	@Test
     public void testReadBlock() {
         // Store a block before attempting to read it
         byte[] blockData = "This is a test block".getBytes();
@@ -91,16 +93,11 @@ public class BlockControllerTest {
 
         // Make the POST request
         String baseUrl = "http://localhost:" + port + "/dfs/block/store";
-        ResponseEntity<String> response = restTemplate.exchange(
-                baseUrl, HttpMethod.POST, entity, String.class);
+        @SuppressWarnings("unused")
+		ResponseEntity<String> response = restTemplate.exchange(baseUrl, HttpMethod.POST, entity, String.class);
 
-        // Construct the URL for reading the stored block
         String readUrl = "http://localhost:" + port + "/dfs/block/read/" + hash;
-
-        // Make the GET request to retrieve the block
-        ResponseEntity<byte[]> response2 = restTemplate.exchange(
-            readUrl, HttpMethod.GET, null, byte[].class
-        );
+        ResponseEntity<byte[]> response2 = restTemplate.exchange(readUrl, HttpMethod.GET, null, byte[].class);
 
         // Assert the response
         assertEquals(200, response2.getStatusCodeValue());

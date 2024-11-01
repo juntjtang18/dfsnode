@@ -163,22 +163,7 @@ public class Config {
 	public boolean isRunningInDocker() {
         return runningInDocker;
 	}
-		/*
-        if (runningInDocker != null) {
-            return runningInDocker; // Return cached result if available
-        }
 
-        String cgroup = "";
-        try {
-            cgroup = new String(Files.readAllBytes(Paths.get("/proc/1/cgroup")));
-        } catch (IOException e) {
-            logger.info("Could not read cgroup file.");
-        }
-        
-        runningInDocker = cgroup.contains("docker") || cgroup.contains("kubepods"); // Cache the result
-        return runningInDocker;
-	}
-*/
 	public String getKeyStoreFilePath() {
 		return this.keyStoreFilePath;
 	}
