@@ -179,13 +179,11 @@ public class DedupeFileService {
         }
     }
 
-    public ResponseEntity<StreamingResponseBody> downloadFile(String fileHash)  {
+    public DownloadResponse downloadFile(String fileHash) {
         logger.debug("DedupeFileService::downloadFile({})", fileHash);
 
         try {
             // Fetch the list of BlockNode objects containing block data
-            logger.debug("POST {}/metadata/file/block-nodes to get the block list with nodes having them for the file", metaNodeUrl);
-
             ResponseEntity<List<BlockNode>> response = restTemplate.exchange(
                     metaNodeUrl + "/metadata/file/block-nodes",
                     HttpMethod.POST,
@@ -194,52 +192,39 @@ public class DedupeFileService {
             );
 
             List<BlockNode> blockNodeList = response.getBody();
-
-            logger.debug("BlockNode list returned is: {}", blockNodeList);
-
             if (blockNodeList == null || blockNodeList.isEmpty()) {
-                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
+                return null;
             }
 
             ResponseEntity<DfsFile> dfsFileResponse = restTemplate.getForEntity(
-            		metaNodeUrl + "/metadata/file/" + fileHash, DfsFile.class);
+                    metaNodeUrl + "/metadata/file/" + fileHash, DfsFile.class);
             DfsFile dfsFile = dfsFileResponse.getBody();
             if (dfsFile == null) {
-            	return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+                return null;
             }
 
             // Define the streaming response
             StreamingResponseBody responseBody = outputStream -> {
-                int i = 0;
                 for (BlockNode blockNode : blockNodeList) {
-                    logger.debug("Reading block({}) ({}) from nodes({})", i, blockNode.getHash(), blockNode.getNodeUrls());
-                    
-                    // Read each block and write it directly to the response output stream
-                    byte[] blockData;
-					try {
-						blockData = readABlock(blockNode);
+                	try {
+	                    byte[] blockData = readABlock(blockNode);
 	                    outputStream.write(blockData);
-	                    outputStream.flush(); // Flush after each block to optimize network throughput
-					} catch (NoSuchElementException | NoSuchAlgorithmException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-                    i++;
+	                    outputStream.flush();
+                	} catch (Exception e) {
+                		e.printStackTrace();
+                        logger.error("An error occurred: {}", e.getMessage(), e);
+                	}
                 }
             };
 
-            logger.debug("Returning StreamingResponseBody for the blocks read.");
-            logger.debug("file name set in header: {}", dfsFile.getName());
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + dfsFile.getName() + "\"")
-                    .header(HttpHeaders.CONTENT_TYPE, "application/octet-stream")  // Set content type for binary download
-                    .body(responseBody);
+            return new DownloadResponse(responseBody, dfsFile.getName());
 
         } catch (Exception e) {
-            e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+            logger.error("An error occurred: {}", e.getMessage(), e);
+            return null;
         }
     }
+
     
     public byte[] readABlock(BlockNode blockNode) throws NoSuchElementException, NoSuchAlgorithmException, IOException {
         Set<String> nodeUrls = blockNode.getNodeUrls();
@@ -321,7 +306,7 @@ public class DedupeFileService {
             ResponseEntity<byte[]> blockResponse = restTemplate.exchange(readUrl, HttpMethod.GET, null, byte[].class);
             
             if (blockResponse.getStatusCode() == HttpStatus.OK && blockResponse.getBody() != null) {
-                logger.debug("Block data read: {}", new String(blockResponse.getBody()));
+                //logger.debug("Block data read: {}", new String(blockResponse.getBody()));
                 return blockResponse.getBody();
                 
             } else {

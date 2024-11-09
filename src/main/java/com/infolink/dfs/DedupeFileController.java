@@ -63,25 +63,26 @@ public class DedupeFileController {
 
             logger.info("File metadata retrieved successfully for filepath: {} by user: {}", filepath, username);
 
-            // Set the response headers for file download
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentDispositionFormData(dfsFile.getName(), dfsFile.getName());
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            // Use the revised downloadFile method to get the DownloadResponse
+            DownloadResponse downloadResponse = dedupeFileService.downloadFile(dfsFile.getHash());
+            if (downloadResponse == null || downloadResponse.getBody() == null) {
+                logger.warn("No content found for file hash: {}", dfsFile.getHash());
+                return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+            }
 
             logger.info("Initiating file download for file hash: {}", dfsFile.getHash());
 
-            // Write the file content to the response output stream
-            ResponseEntity<StreamingResponseBody> response = dedupeFileService.downloadFile(dfsFile.getHash());
+            // Set the response headers for file download
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + downloadResponse.getFilename() + "\"")
+                    .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE)  // Set content type for binary download
+                    .body(downloadResponse.getBody());
 
-            logger.info("File download response created successfully for file hash: {}", dfsFile.getHash());
-
-            return response;
         } catch (Exception e) {
             logger.error("Error occurred during file download for filepath: {} by user: {}", filepath, username, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-
 
     @CrossOrigin(origins = "*")
     @GetMapping("/dfs/file/downloadByHash")
@@ -94,16 +95,18 @@ public class DedupeFileController {
         }
 
         // Fetch the file content as a stream based on the provided hash
-        ResponseEntity<StreamingResponseBody> response = dedupeFileService.downloadFile(hash);
+        DownloadResponse downloadResponse = dedupeFileService.downloadFile(hash);
 
-        // Handle unsuccessful response or missing content
-        if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+        if (downloadResponse == null || downloadResponse.getBody() == null) {
             logger.info("No content found for hash: {}", hash);
             return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
         }
 
-        // Return the streaming response to the client
-        return response;
+        // Set the Content-Disposition header with the correct filename
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + downloadResponse.getFilename() + "\"")
+                .header(HttpHeaders.CONTENT_TYPE, "application/octet-stream")  // Set content type for binary download
+                .body(downloadResponse.getBody());
     }
   
 }

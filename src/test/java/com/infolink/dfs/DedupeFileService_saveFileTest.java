@@ -144,10 +144,10 @@ public class DedupeFileService_saveFileTest {
         assertNotNull(fileHash, "File hash should not be null");
 
         // Download the file using downloadFile method
-        ResponseEntity<StreamingResponseBody> response = fileService.downloadFile(fileHash);
+        DownloadResponse response = fileService.downloadFile(fileHash);
 
         // Assert that the response status is OK and body is not null
-        assertThat(response.getStatusCode()).isEqualTo(OK);
+        //assertThat(response.getStatusCode()).isEqualTo(OK);
         assertThat(response.getBody()).isNotNull();
 
         // Prepare a ByteArrayOutputStream to capture streamed data
