@@ -1,8 +1,11 @@
 package com.infolink.dfs;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
@@ -20,6 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -31,6 +35,7 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.infolink.dfs.shared.DfsNode;
 
@@ -141,32 +146,29 @@ public class DedupeFileControllerTest {
         // First, upload the file to get a hash
         String fileHash = uploadFileAndGetHash();
 
-        // Now, prepare to download the file using the hash
-        Map<String, String> requestBody = new HashMap<>();
-        requestBody.put("filepath", TARGET_DIR + "/" + TEST_FILE_PATH); // Assuming this maps to the file path
-        requestBody.put("username", USER); // Assuming this maps to the username
-
-        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(requestBody);
-
-        // Call the download endpoint
-        ResponseEntity<Resource> response = restTemplate.exchange(
-            baseUrl + "/dfs/file/download",  // Ensure this matches the actual endpoint URL
-            HttpMethod.POST,  // Use POST since the endpoint is annotated with @PostMapping
-            requestEntity,
-            Resource.class
+        // Call the download endpoint using GET with the file hash as a query parameter
+        ResponseEntity<byte[]> response = restTemplate.exchange(
+            baseUrl + "/dfs/file/downloadByHash?hash=" + fileHash,  // Updated endpoint with hash as query parameter
+            HttpMethod.GET,
+            null,
+            byte[].class  // Use byte array to handle binary data
         );
 
-        // Validate the response
+        // Validate the response status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isNotNull();
 
-        // Check the content of the downloaded file
-        String downloadedContent = new String(response.getBody().getInputStream().readAllBytes());
+        // Get the downloaded content as a byte array
+        byte[] downloadedContent = response.getBody();
+        
+        // Read the original content from the file as a byte array
         File file = new File(TEST_FILE_PATH);
-        String originalContent = Files.readString(file.toPath());
+        byte[] originalContent = Files.readAllBytes(file.toPath());
 
+        // Verify the downloaded content matches the original file content
         assertThat(downloadedContent).isEqualTo(originalContent);
     }
+
 
     private String uploadFileAndGetHash() throws IOException, NoSuchAlgorithmException {
         // Create a real MultipartFile from the test file

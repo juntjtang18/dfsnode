@@ -1,29 +1,24 @@
 package com.infolink.dfs;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
 
 import com.infolink.dfs.shared.DfsNode;
 
 import java.io.IOException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Map;
 import java.util.NoSuchElementException;
 
 @RestController
 public class BlockController {
+    private static final Logger logger = LoggerFactory.getLogger(BlockController.class);
 
     @Autowired
     private BlockService blockService;
-    @Autowired
-    private RestTemplate restTemplate;
     
     // Endpoint to store a block
     @PostMapping("/dfs/block/store")
@@ -63,15 +58,18 @@ public class BlockController {
     }
     
     @PostMapping("/dfs/block/replicate-to-another-node")
-    public ResponseEntity<String> replicateToAnotherNode(@RequestBody Map<String, Object> requestBody) {
+    public ResponseEntity<String> replicateToAnotherNode(@RequestBody RequestReplicateBlock requestReplicateBlock) {
+        logger.debug("/dfs/block/replicate-to-another-node requested.");
         byte[] blockData;
         try {
-            // Extract blockHash and targetNodeUrl from the request body
-            String blockHash = (String)requestBody.get("blockHash");
-            DfsNode targetNode = (DfsNode)requestBody.get("targetNode");
-
+            // Extract blockHash and targetNode from the request body
+            String blockHash = requestReplicateBlock.getBlockHash();
+            DfsNode targetNode = requestReplicateBlock.getTargetNode();
+            logger.debug("Request parameters blockHash={} targetNode={}", blockHash, targetNode);
+            
             // Read the block data from the block service
             blockData = blockService.readBlock(blockHash);
+            logger.debug("blockData read, size={}", blockData.length);
             
             blockService.storeBlockOnRemoteNode(targetNode, blockHash, blockData);
             return ResponseEntity.status(HttpStatus.OK).body("Stored the block to target node.");
@@ -83,7 +81,7 @@ public class BlockController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error processing block: " + e.getMessage());
             
         } catch (Exception e) {
-        	return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to store block to target node." + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to store block to target node: " + e.getMessage());
         }
     }
 

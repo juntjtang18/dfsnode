@@ -31,16 +31,16 @@ public class AppBeanConfig {
     @PostConstruct
     public void init() {
         // Set MongoDB URI dynamically based on environment
-        String effectiveMongoUri = EnvironmentUtils.isInDocker() 
-            ? "mongodb://mongodb:27017" 
-            : "mongodb://localhost:27017";
-        System.setProperty("spring.data.mongodb.uri", effectiveMongoUri);
+        //String effectiveMongoUri = EnvironmentUtils.isInDocker() 
+        //    ? "mongodb://mongodb:27017" 
+        //    : "mongodb://localhost:27017";
+        //System.setProperty("spring.data.mongodb.uri", effectiveMongoUri);
         
         // Set Redis host dynamically based on environment
         this.redisHost = EnvironmentUtils.isInDocker() ? "redis" : "localhost";
         System.setProperty("spring.redis.host", redisHost);
         
-        logger.info("MongoDB URI set to: {}", effectiveMongoUri);
+        //logger.info("MongoDB URI set to: {}", effectiveMongoUri);
         logger.info("Redis host set to: {}", redisHost);
     }
 

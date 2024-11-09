@@ -14,12 +14,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.infolink.dfs.shared.DfsFile;
 
@@ -45,7 +47,7 @@ public class DedupeFileController {
     }
 
     @PostMapping("/dfs/file/download")
-    public ResponseEntity<Resource> downloadFile(@RequestBody Map<String, String> request) {
+    public ResponseEntity<StreamingResponseBody> downloadFile(@RequestBody Map<String, String> request) {
         String filepath = request.get("filepath");
         String username = request.get("username");
 
@@ -69,7 +71,7 @@ public class DedupeFileController {
             logger.info("Initiating file download for file hash: {}", dfsFile.getHash());
 
             // Write the file content to the response output stream
-            ResponseEntity<Resource> response = dedupeFileService.downloadFile(dfsFile.getHash());
+            ResponseEntity<StreamingResponseBody> response = dedupeFileService.downloadFile(dfsFile.getHash());
 
             logger.info("File download response created successfully for file hash: {}", dfsFile.getHash());
 
@@ -81,8 +83,9 @@ public class DedupeFileController {
     }
 
 
+    @CrossOrigin(origins = "*")
     @GetMapping("/dfs/file/downloadByHash")
-    public ResponseEntity<Resource> downloadFileByHash(@RequestParam("hash") String hash) {
+    public ResponseEntity<StreamingResponseBody> downloadFileByHash(@RequestParam("hash") String hash) {
         logger.debug("downloadFileByHash() called with hash: {}", hash);
 
         if (hash == null || hash.isEmpty()) {
@@ -90,19 +93,17 @@ public class DedupeFileController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         }
 
-        try {
-            // Use dedupeFileService to fetch the file content based on the provided hash
-            ResponseEntity<Resource> response = dedupeFileService.downloadFile(hash);
-            if (response == null || !response.getStatusCode().is2xxSuccessful()) {
-                logger.info("No content found for hash: {}", hash);
-                return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
-            }
+        // Fetch the file content as a stream based on the provided hash
+        ResponseEntity<StreamingResponseBody> response = dedupeFileService.downloadFile(hash);
 
-            return response;
-        } catch (Exception e) {
-            logger.error("An error occurred during file download by hash: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
+        // Handle unsuccessful response or missing content
+        if (response == null || !response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+            logger.info("No content found for hash: {}", hash);
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
         }
+
+        // Return the streaming response to the client
+        return response;
     }
-    
+  
 }

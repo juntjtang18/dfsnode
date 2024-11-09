@@ -1,5 +1,6 @@
 package com.infolink.dfs;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -17,10 +18,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.core.io.InputStreamSource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import com.infolink.dfs.shared.DfsNode;
 
@@ -129,30 +132,37 @@ public class DedupeFileService_saveFileTest {
     }
     
     @Test
-    public void testDedupeSaveFile() throws IOException, NoSuchAlgorithmException {
+    public void testDedupeSaveAndDownloadFile() throws IOException, NoSuchAlgorithmException {
         // Create a real MultipartFile from the test file
-        //byte[] fileContent = Files.readAllBytes(new File(TEST_FILE_PATH).toPath());
         File file = new File(TEST_FILE_PATH);
         CustomMultipartFile multipartFile = new CustomMultipartFile(file);
 
-        // Call the dedupeSaveFile method
+        // Call dedupeSaveFile to save the file and get the file hash
         String fileHash = fileService.dedupeSaveFile(multipartFile, USER, TARGET_DIR);
 
-        // Validate the result
+        // Validate that the file hash is not null
         assertNotNull(fileHash, "File hash should not be null");
-        
-        ResponseEntity<Resource> response = fileService.downloadFile(fileHash);
-        // Assert
+
+        // Download the file using downloadFile method
+        ResponseEntity<StreamingResponseBody> response = fileService.downloadFile(fileHash);
+
+        // Assert that the response status is OK and body is not null
         assertThat(response.getStatusCode()).isEqualTo(OK);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().contentLength()).isGreaterThan(0);
 
-        // Check the content of the downloaded file
-        String downloadedContent = new String(response.getBody().getInputStream().readAllBytes());
-        
+        // Prepare a ByteArrayOutputStream to capture streamed data
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+        // Consume the StreamingResponseBody and write its content to the ByteArrayOutputStream
+        StreamingResponseBody responseBody = response.getBody();
+        assert responseBody != null;
+        responseBody.writeTo(outputStream);
+
+        // Convert the streamed content to a String
+        String downloadedContent = outputStream.toString();
         String originalContent = Files.readString(file.toPath());
 
+        // Assert that the downloaded content matches the original content
         assertThat(downloadedContent).isEqualTo(originalContent);
-        
     }
 }

@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,6 +22,8 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+
 import com.infolink.dfs.BlockController.RequestStoreBlock;
 import com.infolink.dfs.shared.DfsNode;
 import com.infolink.dfs.metanode.ResponseNodesForBlock;
@@ -176,86 +179,115 @@ public class DedupeFileService {
         }
     }
 
-    public ResponseEntity<Resource> downloadFile(String fileHash) {
-    	logger.debug("DedupeFileService::downloadFile({})", fileHash);
-    	
+    public ResponseEntity<StreamingResponseBody> downloadFile(String fileHash)  {
+        logger.debug("DedupeFileService::downloadFile({})", fileHash);
+
         try {
             // Fetch the list of BlockNode objects containing block data
-        	logger.debug("POST {}/metadata/file/block-nodes to get the block list with nodes have them for the file", metaNodeUrl);
-        	
+            logger.debug("POST {}/metadata/file/block-nodes to get the block list with nodes having them for the file", metaNodeUrl);
+
             ResponseEntity<List<BlockNode>> response = restTemplate.exchange(
-            		metaNodeUrl + "/metadata/file/block-nodes",  // Updated endpoint URL
+                    metaNodeUrl + "/metadata/file/block-nodes",
                     HttpMethod.POST,
-                    new HttpEntity<>(fileHash),  // Wrap the requestBody in HttpEntity
+                    new HttpEntity<>(fileHash),
                     new ParameterizedTypeReference<List<BlockNode>>() {}
-            );            
+            );
+
             List<BlockNode> blockNodeList = response.getBody();
-            
+
             logger.debug("BlockNode list returned is: {}", blockNodeList);
-            
+
             if (blockNodeList == null || blockNodeList.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NO_CONTENT).body(null);
             }
 
-            List<byte[]> blockDataList = new ArrayList<>();
-
-            // Iterate over each BlockNode and download the corresponding block
-            logger.debug("Iterate over each BlockNode and download the corresponding block");
-            int i = 0;
-            for (BlockNode blockNode : blockNodeList) {
-            	
-                Set<String> nodeUrls = blockNode.getNodeUrls();
-                logger.debug(" Read the block({}) ({}), which stored on nodes({})", i, blockNode.getHash(), blockNode.getNodeUrls());
-                
-                // Ensure there is at least one node URL to fetch from
-                if (nodeUrls == null || nodeUrls.isEmpty()) {
-                    continue; // Skip this block node if no URLs are available
-                }
-
-                String nodeUrl = nodeUrls.iterator().next(); // Get the first available URL
-                if (nodeUrl.equals(config.getContainerUrl())) {
-                	logger.debug(" Read block {} from local{}.", blockNode.getHash(), nodeUrl);
-                	byte[] thisBlock = blockService.readBlock(blockNode.getHash());
-                	blockDataList.add(thisBlock);
-                    logger.debug("Block data read: {}", new String(thisBlock));
-                	
-                } else {
-                	logger.debug(" Read block from remote{}.", nodeUrl);
-                	byte[] thisBlock = readBlockFromRemoteNode(blockNode.getHash(), nodeUrl);
-                	blockDataList.add(thisBlock);
-                }
-                i++;
+            ResponseEntity<DfsFile> dfsFileResponse = restTemplate.getForEntity(
+            		metaNodeUrl + "/metadata/file/" + fileHash, DfsFile.class);
+            DfsFile dfsFile = dfsFileResponse.getBody();
+            if (dfsFile == null) {
+            	return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
             }
 
-            // Combine all blocks into a single byte array to reconstruct the original file
-            int totalSize = blockDataList.stream().mapToInt(b -> b.length).sum();
-            byte[] combinedData = new byte[totalSize];
-            int currentIndex = 0;
-            
-            logger.debug("File totalsize read: {}", totalSize);
-            
-            for (byte[] blockData : blockDataList) {
-                System.arraycopy(blockData, 0, combinedData, currentIndex, blockData.length);
-                currentIndex += blockData.length;
-            }
+            // Define the streaming response
+            StreamingResponseBody responseBody = outputStream -> {
+                int i = 0;
+                for (BlockNode blockNode : blockNodeList) {
+                    logger.debug("Reading block({}) ({}) from nodes({})", i, blockNode.getHash(), blockNode.getNodeUrls());
+                    
+                    // Read each block and write it directly to the response output stream
+                    byte[] blockData;
+					try {
+						blockData = readABlock(blockNode);
+	                    outputStream.write(blockData);
+	                    outputStream.flush(); // Flush after each block to optimize network throughput
+					} catch (NoSuchElementException | NoSuchAlgorithmException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+                    i++;
+                }
+            };
 
-            // Create a ByteArrayResource from the combined data
-            Resource resource = new ByteArrayResource(combinedData);
-            
-            logger.debug("Return Resource for the blocks read.");
-            
+            logger.debug("Returning StreamingResponseBody for the blocks read.");
+            logger.debug("file name set in header: {}", dfsFile.getName());
             return ResponseEntity.ok()
-                    .header("Content-Disposition", "attachment; filename=\"" + fileHash + "\"")
-                    .contentLength(combinedData.length)
-                    .body(resource);
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + dfsFile.getName() + "\"")
+                    .header(HttpHeaders.CONTENT_TYPE, "application/octet-stream")  // Set content type for binary download
+                    .body(responseBody);
 
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(null); // Return server error if something goes wrong during the process
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
     
+    public byte[] readABlock(BlockNode blockNode) throws NoSuchElementException, NoSuchAlgorithmException, IOException {
+        Set<String> nodeUrls = blockNode.getNodeUrls();
+
+        // Ensure there is at least one node URL to fetch from
+        if (nodeUrls == null || nodeUrls.isEmpty()) {
+            logger.warn("No nodes available to read block with hash: {}", blockNode.getHash());
+            return null; 
+        }
+
+        // Attempt to read the block from each node URL until successful
+        for (String nodeUrl : nodeUrls) {
+            try {
+                byte[] thisBlock;
+
+                if (nodeUrl.equals(config.getContainerUrl())) {
+                    logger.debug("Attempting to read block {} from local node: {}", blockNode.getHash(), nodeUrl);
+                    thisBlock = blockService.readBlock(blockNode.getHash());
+                } else {
+                    logger.debug("Attempting to read block {} from remote node: {}", blockNode.getHash(), nodeUrl);
+                    thisBlock = readBlockFromRemoteNode(blockNode.getHash(), nodeUrl);
+                }
+
+                // If the block was successfully read, return it
+                if (thisBlock != null) {
+                    logger.debug("Successfully read block {} from node: {}", blockNode.getHash(), nodeUrl);
+                    return thisBlock;
+                } else {
+                    logger.warn("Block data is null for block {} on node: {}", blockNode.getHash(), nodeUrl);
+                }
+            } catch (IOException | NoSuchElementException | NoSuchAlgorithmException e) {
+                logger.error("Failed to read block {} from node {}: {}", blockNode.getHash(), nodeUrl, e.getMessage());
+                // Log and continue to the next node
+            }
+        }
+
+        // If none of the nodes were able to provide the block, return null
+        logger.warn("Unable to retrieve block {} from any available nodes", blockNode.getHash());
+        return null;
+    }
+
+    public String getNodeForRequest(String requestNodeUrl, BlockNode blockNode) {
+    	List<String> nodeUrls = new ArrayList<>(blockNode.getNodeUrls());
+        int N = nodeUrls.size();
+        // Generate a unique index for each request for the same block
+        int nodeIndex = Math.abs(requestNodeUrl.hashCode()) % N;
+        return nodeUrls.get(nodeIndex); // Return the node URL assigned for this request
+    }
     
     byte[] readBlockFromRemoteNode(String blockHash, String nodeUrl) {
         String readUrl = "";

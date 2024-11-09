@@ -141,6 +141,8 @@ public class BlockService {
     }
 
     public void storeBlockOnRemoteNode(DfsNode node, String hash, byte[] block) throws Exception {
+    	logger.debug("BlockService::storeBlockOnRemoteNode(...) called with DfsNode{}, hash{}, block{}", node, hash, block.length);
+    	
     	if (node==null || hash==null || block==null) throw new Exception("The passed in parameter is null.");
     	
     	String nodeUrl = config.isRunningInDocker() ? node.getContainerUrl():node.getLocalUrl();
@@ -152,7 +154,11 @@ public class BlockService {
 
         HttpEntity<RequestStoreBlock> requestEntity = new HttpEntity<>(request);
         ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
-        if (!response.getStatusCode().is2xxSuccessful()) throw new Exception("Fail to store block onto " + nodeUrl + ". Response is " + response.getBody());
+        if (!response.getStatusCode().is2xxSuccessful()) {
+        	throw new Exception("Fail to store block onto " + nodeUrl + ". Response is " + response.getBody());
+        } else {
+        	logger.debug("Successfully store the block onto {}.", nodeUrl);
+        }
     }
 
     public boolean registerBlockLocation(String hash) {
